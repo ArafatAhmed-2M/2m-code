@@ -36,17 +36,16 @@ Type 'exit' or 'quit' to end the session. Press Ctrl+C to cancel.
 Example:
   2m chat fullstack
   2m chat code-review`,
-	Args: cobra.ExactArgs(1),
+	Args: cobra.MinimumNArgs(1),
 	RunE: runChat,
 }
 
-func init() {
-	rootCmd.AddCommand(chatCmd)
-}
-
 // runChat is the handler for `2m chat <team>`.
+// The team name may contain spaces (e.g. '2m code test team') so all
+// positional args are joined before lookup.
 func runChat(cmd *cobra.Command, args []string) error {
-	teamName := args[0]
+	teamName := strings.Join(args, " ")
+
 	renderer := NewRenderer()
 
 	// Print welcome banner

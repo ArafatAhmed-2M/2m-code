@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -27,11 +28,15 @@ var runCmd = &cobra.Command{
 	Long: `Execute a task with a configured agent team. The team's agents will
 collaborate — planning, implementing, and reviewing — then exit.
 
+Quote the team name and/or the task when they contain spaces:
+  2m run "full-stack" "Build a REST API for user authentication"
+  2m run "code-review" "Review the auth middleware"
+
 Example:
   2m run fullstack "Build a REST API for user authentication with JWT"
   2m run code-review "Review the auth middleware in internal/auth/"
   2m run data-science "Analyze the sales CSV and suggest ML models"`,
-	Args: cobra.ExactArgs(2),
+	Args: cobra.MinimumNArgs(2),
 	RunE: runTask,
 }
 
@@ -40,10 +45,27 @@ func init() {
 }
 
 // runTask is the handler for `2m run <team> "<task>"`.
+// The team name may contain spaces so all positional args are joined and then
+// split by trying progressively shorter prefixes as team name candidates.
 func runTask(cmd *cobra.Command, args []string) error {
-	teamName := args[0]
-	task := args[1]
-
+	// Try every possible split, consuming fewer words from the right until a
+	// matching team file is found (first attempt = "everything but last arg is
+	// team, last arg is task").
+	var teamName, task string
+	found := false
+	for i := len(args) - 1; i >= 1; i-- {
+		teamName = strings.Join(args[:i], " ")
+		task = strings.Join(args[i:], " ")
+		if _, err := team.LoadTeam(teamName); err == nil {
+			found = true
+			break
+		}
+	}
+	if !found {
+		// Nothing matched — treat the last token as the team name.
+		teamName = args[len(args)-1]
+		task = strings.Join(args[:len(args)-1], " ")
+	}
 	renderer := NewRenderer()
 
 	// Load team configuration

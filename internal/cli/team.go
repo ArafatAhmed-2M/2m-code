@@ -9,6 +9,7 @@ package cli
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
@@ -40,7 +41,7 @@ var teamShowCmd = &cobra.Command{
 	Use:   "show <name>",
 	Short: "Show team configuration details",
 	Long:  "Display the full configuration for a specific team, including all agents and workflow settings.",
-	Args:  cobra.ExactArgs(1),
+	Args:  cobra.MinimumNArgs(1),
 	RunE:  showTeam,
 }
 
@@ -49,7 +50,7 @@ var historyCmd = &cobra.Command{
 	Use:   "history <team>",
 	Short: "Show last session's team channel log",
 	Long:  "Display the conversation history from the most recent session with a team.",
-	Args:  cobra.ExactArgs(1),
+	Args:  cobra.MinimumNArgs(1),
 	RunE:  showHistory,
 }
 
@@ -122,8 +123,9 @@ func listTeams(cmd *cobra.Command, args []string) error {
 }
 
 // showTeam handles `2m team show <name>`.
+// The team name may contain spaces so all positional args are joined.
 func showTeam(cmd *cobra.Command, args []string) error {
-	teamName := args[0]
+	teamName := strings.Join(args, " ")
 	renderer := NewRenderer()
 
 	t, err := team.LoadTeam(teamName)
@@ -169,8 +171,9 @@ func showTeam(cmd *cobra.Command, args []string) error {
 }
 
 // showHistory handles `2m history <team>`.
+// The team name may contain spaces so all positional args are joined.
 func showHistory(cmd *cobra.Command, args []string) error {
-	teamName := args[0]
+	teamName := strings.Join(args, " ")
 	renderer := NewRenderer()
 
 	renderer.PrintInfo(fmt.Sprintf("History for team '%s':", teamName))
