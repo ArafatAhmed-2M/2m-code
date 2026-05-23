@@ -148,9 +148,10 @@ func runNewTeam(cmd *cobra.Command, args []string) error {
 		}
 		leader = promptWithOptions(scanner, promptStyle.Render("  Leader agent"), agentNames)
 
-		reviewerInput := prompt(scanner, promptStyle.Render("  Reviewer agent (or Enter to skip): "))
-		if reviewerInput != "" {
-			reviewer = reviewerInput
+		reviewOptions := append([]string{"(skip)"}, agentNames...)
+		reviewerChoice := promptWithOptions(scanner, promptStyle.Render("  Reviewer agent"), reviewOptions)
+		if reviewerChoice != "(skip)" {
+			reviewer = reviewerChoice
 		}
 	}
 
