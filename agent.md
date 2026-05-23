@@ -573,6 +573,18 @@ Build files in this exact order to ensure each piece is testable before the next
 - Error messages must be actionable: tell the user what went wrong AND what to do next
 - Every tool execution is logged (not printed unless `--verbose`) with timestamp and duration
 
+## Issue Logging
+
+Whenever you fix a bug, resolve an error, or make a corrective change, you **must** document it in `issue.md` at the project root. Each entry must include:
+
+1. **Title** — short description of the issue
+2. **File(s)** — which files were involved
+3. **Problem** — what was wrong
+4. **Fix** — how it was resolved
+5. **Commit** — the commit hash that contains the fix
+
+This file serves as the project's collective memory so future AI agents and human developers don't repeat the same mistakes. When you see a pattern of similar issues, add a "Status" line indicating whether a permanent fix is still needed.
+
 ---
 
 ## Code Conventions
