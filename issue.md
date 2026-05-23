@@ -115,4 +115,16 @@
 
 **Fix:** Added `~/.2mcode/agent_engine/server.py` as the 2nd search path (after env var override) in `findEngineScript()`, and updated the error message to suggest reinstalling rather than vague advice.
 
+**Commit:** `a93aece`
+
+---
+
+## 10. Bundled teams not found outside project directory — missing `~/.2mcode/config/teams/` in search paths
+
+**File(s):** `internal/team/team.go`
+
+**Problem:** `2m chat fullstack` from outside the project directory fails with `team 'fullstack' not found`. The install script copies bundled teams to `~/.2mcode/config/teams/`, but `getSearchPaths()` and `ListTeams()` only check project-local `./.2mcode/teams/`, global `~/.2mcode/teams/`, and relative-to-binary `config/teams/`. The installed location `~/.2mcode/config/teams/` was never searched.
+
+**Fix:** Added `~/.2mcode/config/teams/<name>.yaml` to both `getSearchPaths()` and `ListTeams()` search directories (right after `~/.2mcode/teams/`). Also updated the not-found error message to list all 4 search locations.
+
 **Commit:** `(pending)`

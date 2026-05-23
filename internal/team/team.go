@@ -100,8 +100,8 @@ func LoadTeam(name string) (*Team, error) {
 	}
 
 	return nil, fmt.Errorf(
-		"team '%s' not found — searched:\n  1. ./.2mcode/teams/%s.yaml\n  2. ~/.2mcode/teams/%s.yaml\n  3. config/teams/%s.yaml\nRun '2m new-team' to create one, or '2m team list' to see available teams",
-		name, name, name, name,
+		"team '%s' not found — searched:\n  1. ./.2mcode/teams/%s.yaml\n  2. ~/.2mcode/teams/%s.yaml\n  3. ~/.2mcode/config/teams/%s.yaml\n  4. config/teams/%s.yaml\nRun '2m new-team' to create one, or '2m team list' to see available teams",
+		name, name, name, name, name,
 	)
 }
 
@@ -119,7 +119,12 @@ func getSearchPaths(name string) []string {
 		paths = append(paths, filepath.Join(homeDir, ".2mcode", "teams", filename))
 	}
 
-	// 3. Bundled examples (relative to binary)
+	// 3. Installed config (~/.2mcode/config/teams/)
+	if homeDir, err := os.UserHomeDir(); err == nil {
+		paths = append(paths, filepath.Join(homeDir, ".2mcode", "config", "teams", filename))
+	}
+
+	// 4. Bundled examples (relative to binary)
 	execPath, err := os.Executable()
 	if err == nil {
 		execDir := filepath.Dir(execPath)
@@ -162,6 +167,7 @@ func ListTeams() (map[string]string, error) {
 	homeDir, err := os.UserHomeDir()
 	if err == nil {
 		searchDirs = append(searchDirs, filepath.Join(homeDir, ".2mcode", "teams"))
+		searchDirs = append(searchDirs, filepath.Join(homeDir, ".2mcode", "config", "teams"))
 	}
 
 	execPath, err := os.Executable()
