@@ -39,7 +39,7 @@ The name "2M" stands for **Multi-Mind**.
 | State / event bus | SQLite via `github.com/mattn/go-sqlite3` | Zero dependency, embedded |
 | Config | YAML via `gopkg.in/yaml.v3` | Human-readable team definitions |
 | Terminal rendering | `github.com/charmbracelet/lipgloss` | Beautiful CLI output |
-| LLM providers | `anthropic`, `openai`, `google-generativeai` Python SDKs | Native SDKs |
+| LLM providers | `anthropic`, `openai`, `google-genai`, `mistralai`, `cohere`, `groq` Python SDKs + `httpx` for Ollama | Native SDKs for all supported providers |
 
 ---
 
@@ -363,7 +363,7 @@ async def call(model, system, messages, tools, max_tokens):
     }
 ```
 
-Follow the same pattern for `google_provider.py` (using `google.generativeai`), `openai_provider.py` (using `openai.OpenAI()`), and `mistral_provider.py` (using `mistral.Mistral()`). Each adapter normalizes responses to the same dict shape.
+Follow the same pattern for `google_provider.py` (using `google.genai`), `openai_provider.py` (using `openai.OpenAI()`), `mistral_provider.py` (using `mistralai.Mistral`), `cohere_provider.py` (using `cohere.Client`), `groq_provider.py` (using `groq.Groq`), `ollama_provider.py` (using `httpx` against `localhost:11434`), and `openrouter_provider.py` (using `openai.OpenAI` with custom `base_url`). Each adapter normalizes responses to the same dict shape.
 
 ---
 
@@ -529,11 +529,14 @@ clean:
 ```
 anthropic>=0.25.0
 openai>=1.30.0
-google-generativeai>=0.5.0
-mistralai>=0.4.0
+google-genai>=1.0.0
+mistralai>=1.0.0
+cohere>=5.5.0
+groq>=0.9.0
 fastapi>=0.111.0
 uvicorn>=0.30.0
 pydantic>=2.7.0
+httpx>=0.27.0
 ```
 
 ---
@@ -544,7 +547,7 @@ Build files in this exact order to ensure each piece is testable before the next
 
 1. `requirements.txt` + `go.mod`
 2. `agent_engine/server.py` + `agent_engine/providers/anthropic_provider.py` — test: single Anthropic call works
-3. All other provider adapters (`google`, `openai`, `mistral`)
+3. All other provider adapters (`google`, `openai`, `mistral`, `cohere`, `groq`, `ollama`, `openrouter`)
 4. `agent_engine/tools/__init__.py` — test: bash tool executes correctly
 5. `agent_engine/agent.py` — full agent routing
 6. `internal/bus/schema.go` + `internal/bus/bus.go` — test: post and read messages

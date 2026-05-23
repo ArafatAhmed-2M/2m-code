@@ -12,7 +12,7 @@
 
 Every current AI coding tool gives you one model, one perspective, one brain. But real engineering teams work differently — they plan, implement, review, and iterate. A tech lead breaks down the problem. A senior engineer builds the solution. A QA engineer catches bugs before they ship. **2M Code brings this dynamic to AI.**
 
-With 2M Code, you define a **team** of AI agents in a simple YAML file. Each agent has a name, a role, a provider (Anthropic, Google, OpenAI, Mistral), and a system prompt that defines their personality and expertise. When you give the team a task, they collaborate through a shared conversation channel — each agent sees what the others have said, builds on their work, and contributes their unique perspective. The result? Code that has been planned, implemented, *and* reviewed before it reaches you.
+With 2M Code, you define a **team** of AI agents in a simple YAML file. Each agent has a name, a role, a provider (Anthropic, Google, OpenAI, Mistral, Cohere, Groq, Ollama, OpenRouter), and a system prompt that defines their personality and expertise. When you give the team a task, they collaborate through a shared conversation channel — each agent sees what the others have said, builds on their work, and contributes their unique perspective. The result? Code that has been planned, implemented, *and* reviewed before it reaches you.
 
 ---
 
@@ -44,13 +44,18 @@ export PATH="$PATH:$(pwd)/bin"
 export ANTHROPIC_API_KEY="your-key"
 export GOOGLE_API_KEY="your-key"
 export OPENAI_API_KEY="your-key"
+export MISTRAL_API_KEY="your-key"
+export COHERE_API_KEY="your-key"
+export GROQ_API_KEY="your-key"
+export OPENROUTER_API_KEY="your-key"
+# Ollama runs locally — no API key needed
 ```
 
 ### Requirements
 
 - **Go 1.22+** — [Install Go](https://go.dev/dl/)
 - **Python 3.11+** — [Install Python](https://python.org/downloads/)
-- **API key** for at least one provider (Anthropic, Google, OpenAI, or Mistral)
+- **API key** for at least one provider (Anthropic, Google, OpenAI, Mistral, Cohere, Groq, or OpenRouter). Ollama runs locally with no key needed.
 
 ---
 
@@ -205,7 +210,7 @@ Teams can be stored in:
 ## Roadmap
 
 ### v1 (Current)
-- ✅ Multi-provider agent teams (Anthropic, Google, OpenAI, Mistral)
+- ✅ Multi-provider agent teams (Anthropic, Google, OpenAI, Mistral, Cohere, Groq, Ollama, OpenRouter)
 - ✅ YAML team configuration
 - ✅ Shared team channel (SQLite event bus)
 - ✅ Leader-first and round-robin orchestration

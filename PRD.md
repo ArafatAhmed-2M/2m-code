@@ -40,7 +40,7 @@ A configurable team of agents — each specialized, each from the best model for
 ### Goals (v1)
 - Ship a working CLI tool installable as a single binary
 - Support agent teams defined in YAML (name, role, provider, model, system prompt)
-- Support providers: Anthropic Claude, Google Gemini, OpenAI GPT
+- Support providers: Anthropic Claude, Google Gemini, OpenAI GPT, Mistral, Cohere, Groq, Ollama, OpenRouter
 - Implement a shared event bus so agents read each other's messages
 - Implement turn-based orchestration (leader-first, then round-robin, then reviewer)
 - Support file reading/writing and bash execution as agent tools
@@ -243,7 +243,11 @@ Agent Engine (Python / FastAPI — localhost:8765)
   ├── Provider: Anthropic
   ├── Provider: Google Gemini
   ├── Provider: OpenAI
-  └── Provider: Mistral
+  ├── Provider: Mistral
+  ├── Provider: Cohere
+  ├── Provider: Groq
+  ├── Provider: Ollama
+  └── Provider: OpenRouter
      │
      ▼
 External LLM APIs

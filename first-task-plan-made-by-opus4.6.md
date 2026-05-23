@@ -17,7 +17,7 @@ Go module definition with Cobra, go-sqlite3, yaml.v3, lipgloss.
 Auto-generated after `go mod tidy`.
 
 #### [NEW] [requirements.txt](file:///c:/Users/pc/Desktop/2m-code/requirements.txt)
-Python deps: anthropic, openai, google-generativeai, mistralai, fastapi, uvicorn, pydantic.
+Python deps: anthropic, openai, google-genai, mistralai, cohere, groq, fastapi, uvicorn, pydantic, httpx.
 
 ---
 
@@ -46,6 +46,18 @@ OpenAI SDK adapter — same normalized shape.
 
 #### [NEW] [mistral_provider.py](file:///c:/Users/pc/Desktop/2m-code/agent_engine/providers/mistral_provider.py)
 Mistral SDK adapter — same normalized shape.
+
+#### [NEW] [cohere_provider.py](file:///c:/Users/pc/Desktop/2m-code/agent_engine/providers/cohere_provider.py)
+Cohere SDK adapter — same normalized shape.
+
+#### [NEW] [groq_provider.py](file:///c:/Users/pc/Desktop/2m-code/agent_engine/providers/groq_provider.py)
+Groq SDK adapter (OpenAI-compatible, ultra-fast LPU inference) — same normalized shape.
+
+#### [NEW] [ollama_provider.py](file:///c:/Users/pc/Desktop/2m-code/agent_engine/providers/ollama_provider.py)
+Ollama local inference adapter — same normalized shape. No API key needed.
+
+#### [NEW] [openrouter_provider.py](file:///c:/Users/pc/Desktop/2m-code/agent_engine/providers/openrouter_provider.py)
+OpenRouter unified API adapter (200+ models via OpenAI-compatible SDK) — same normalized shape.
 
 #### [NEW] [tools/__init__.py](file:///c:/Users/pc/Desktop/2m-code/agent_engine/tools/__init__.py)
 Tool definitions (bash, read_file, write_file) and `execute_tool()` function.
