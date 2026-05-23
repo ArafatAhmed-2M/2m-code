@@ -7,12 +7,14 @@
 package bridge
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -21,6 +23,15 @@ type CustomToolDef struct {
 	Name        string      `json:"name"`
 	Description string      `json:"description"`
 	InputSchema map[string]interface{} `json:"input_schema"`
+}
+
+// StreamEvent represents a single event from a streaming response.
+type StreamEvent struct {
+	Type        string // "text", "tool_call", "done", "error"
+	Content     string
+	ToolCall    ToolCall
+	InputTokens int
+	OutputTokens int
 }
 
 // AgentRequest is the JSON body sent to the Python agent engine's /call endpoint.
@@ -32,6 +43,7 @@ type AgentRequest struct {
 	Tools       []string          `json:"tools"`        // Enabled tool names
 	CustomTools []CustomToolDef   `json:"custom_tools"` // User-defined tool definitions (optional)
 	MaxTokens   int               `json:"max_tokens"`   // Max response tokens
+	Stream      bool              `json:"stream"`       // Enable SSE streaming
 }
 
 // MessagePayload is a single message in the conversation sent to the engine.
@@ -157,6 +169,97 @@ func (b *Bridge) Call(ctx context.Context, req AgentRequest) (*AgentResponse, er
 	}
 
 	return &agentResp, nil
+}
+
+// CallStream sends a streaming agent request and processes SSE events via a callback.
+// The callback receives each StreamEvent as it arrives. The final AgentResponse
+// is assembled from the stream and returned.
+func (b *Bridge) CallStream(ctx context.Context, req AgentRequest, onEvent func(StreamEvent)) (*AgentResponse, error) {
+	req.Stream = true
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("cannot marshal agent request: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", b.baseURL+"/call", bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("cannot create streaming request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Accept", "text/event-stream")
+
+	resp, err := b.httpClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("agent engine stream call failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		respBody, _ := io.ReadAll(resp.Body)
+		var errDetail struct{ Detail string `json:"detail"` }
+		if json.Unmarshal(respBody, &errDetail) == nil && errDetail.Detail != "" {
+			return nil, fmt.Errorf("agent engine error (HTTP %d): %s", resp.StatusCode, errDetail.Detail)
+		}
+		return nil, fmt.Errorf("agent engine error (HTTP %d): %s", resp.StatusCode, string(respBody))
+	}
+
+	result := &AgentResponse{}
+	scanner := bufio.NewScanner(resp.Body)
+	var currentEvent string
+
+	for scanner.Scan() {
+		line := scanner.Text()
+
+		if strings.HasPrefix(line, "event: ") {
+			currentEvent = strings.TrimPrefix(line, "event: ")
+			continue
+		}
+
+		if strings.HasPrefix(line, "data: ") {
+			data := strings.TrimPrefix(line, "data: ")
+			if currentEvent == "done" {
+				var doneData struct {
+					InputTokens  int `json:"input_tokens"`
+					OutputTokens int `json:"output_tokens"`
+				}
+				json.Unmarshal([]byte(data), &doneData)
+				result.InputTokens = doneData.InputTokens
+				result.OutputTokens = doneData.OutputTokens
+				onEvent(StreamEvent{Type: "done", InputTokens: doneData.InputTokens, OutputTokens: doneData.OutputTokens})
+				continue
+			}
+
+			if currentEvent == "text" {
+				var textData struct {
+					Content string `json:"content"`
+				}
+				json.Unmarshal([]byte(data), &textData)
+				result.Content += textData.Content
+				onEvent(StreamEvent{Type: "text", Content: textData.Content})
+				continue
+			}
+
+			if currentEvent == "tool_call" {
+				var tc ToolCall
+				json.Unmarshal([]byte(data), &tc)
+				result.ToolCalls = append(result.ToolCalls, tc)
+				onEvent(StreamEvent{Type: "tool_call", ToolCall: tc})
+				continue
+			}
+
+			if currentEvent == "error" {
+				var errData struct{ Detail string `json:"detail"` }
+				json.Unmarshal([]byte(data), &errData)
+				return nil, fmt.Errorf("stream error: %s", errData.Detail)
+			}
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("error reading stream: %w", err)
+	}
+
+	return result, nil
 }
 
 // ListModels fetches the list of available models from all providers.

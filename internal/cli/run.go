@@ -9,6 +9,7 @@ package cli
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -18,9 +19,19 @@ import (
 
 	"github.com/2mcode/2mcode/internal/bridge"
 	"github.com/2mcode/2mcode/internal/bus"
+	"github.com/2mcode/2mcode/internal/memory"
 	"github.com/2mcode/2mcode/internal/orchestrator"
 	"github.com/2mcode/2mcode/internal/team"
 )
+
+// memoryDir returns the path to the persistent memory directory.
+func memoryDir() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("cannot determine home directory: %w", err)
+	}
+	return filepath.Join(home, ".2mcode", "memory"), nil
+}
 
 var runCmd = &cobra.Command{
 	Use:   "run <team> \"<task>\"",
@@ -120,6 +131,14 @@ func runTask(cmd *cobra.Command, args []string) error {
 
 	// Create the orchestrator and run the task
 	orch := orchestrator.New(eventBus, br, renderer)
+
+	// Attach persistent memory if available
+	if memDir, err := memoryDir(); err == nil {
+		if memStore, err := memory.NewFileStore(memDir); err == nil {
+			memSummarizer := memory.NewSummarizer(br, memStore)
+			orch.WithMemory(memSummarizer)
+		}
+	}
 
 	ctx = context.Background()
 	return orch.RunTask(ctx, t, sessionID, task)

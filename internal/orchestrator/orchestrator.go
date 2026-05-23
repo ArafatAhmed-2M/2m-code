@@ -11,10 +11,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/2mcode/2mcode/internal/bridge"
 	"github.com/2mcode/2mcode/internal/bus"
+	"github.com/2mcode/2mcode/internal/memory"
 	"github.com/2mcode/2mcode/internal/team"
 )
 
@@ -48,9 +50,10 @@ type Renderer interface {
 
 // Orchestrator coordinates agent turns for a team task.
 type Orchestrator struct {
-	eventBus  *bus.Bus
-	bridge    *bridge.Bridge
-	renderer  Renderer
+	eventBus         *bus.Bus
+	bridge           *bridge.Bridge
+	renderer         Renderer
+	memorySummarizer *memory.Summarizer // nil = memory disabled
 }
 
 // New creates a new Orchestrator with the given dependencies.
@@ -60,6 +63,14 @@ func New(eventBus *bus.Bus, br *bridge.Bridge, renderer Renderer) *Orchestrator 
 		bridge:   br,
 		renderer: renderer,
 	}
+}
+
+// WithMemory enables persistent memory for the orchestrator.
+// If set, the orchestrator will save session summaries after RunTask
+// and inject relevant past context into agent system prompts.
+func (o *Orchestrator) WithMemory(s *memory.Summarizer) *Orchestrator {
+	o.memorySummarizer = s
+	return o
 }
 
 // RunTask executes a complete task with the given team.
@@ -125,6 +136,11 @@ func (o *Orchestrator) RunTask(ctx context.Context, t *team.Team, sessionID, tas
 	costUSD := EstimateCost(t.Agents[0].Model, totalInputTokens, totalOutputTokens)
 	o.renderer.PrintSummary(turnCount, totalInputTokens, totalOutputTokens, costUSD, duration)
 
+	// Save memory for this session (best-effort)
+	if o.memorySummarizer != nil && turnCount > 0 {
+		o.saveSessionMemory(ctx, t, sessionID, task)
+	}
+
 	return nil
 }
 
@@ -159,7 +175,7 @@ func (o *Orchestrator) RunChatTurn(ctx context.Context, t *team.Team, sessionID,
 // runAgentTurn executes a single agent's turn:
 //   1. Get history from the event bus
 //   2. Build the request with the agent's system prompt
-//   3. Call the Python engine via the bridge
+//   3. Call the Python engine via the bridge (with streaming if available)
 //   4. Handle tool use loops (up to 5 iterations)
 //   5. Post the final response to the event bus
 //   6. Render the output
@@ -169,14 +185,125 @@ func (o *Orchestrator) runAgentTurn(
 	sessionID string,
 	agent team.Agent,
 ) (inputTokens int, outputTokens int, err error) {
-	// 1. Get conversation history from the bus
 	history, err := o.eventBus.GetHistory(sessionID, agent.MaxContext)
 	if err != nil {
 		return 0, 0, fmt.Errorf("cannot get history: %w", err)
 	}
 
-	// 2. Format messages for the LLM API
-	// Prepend agent name to each message so the model knows who said what
+	messages := o.formatMessages(t, history)
+	customToolDefs := o.buildCustomToolDefs(t)
+
+	// Inject memory context into system prompt if available
+	systemPrompt := agent.SystemPrompt
+	if o.memorySummarizer != nil {
+		if ctx, err := o.memorySummarizer.BuildContext(t.Name, 5); err == nil && ctx != "" {
+			systemPrompt = systemPrompt + "\n\n" + ctx
+		}
+	}
+
+	req := bridge.AgentRequest{
+		Provider:    agent.Provider,
+		Model:       agent.Model,
+		System:      systemPrompt,
+		Messages:    messages,
+		Tools:       agent.Tools,
+		CustomTools: customToolDefs,
+		MaxTokens:   t.Workflow.MaxTokens,
+	}
+
+	o.renderer.PrintAgentStart(agent)
+
+	resp, err := o.callAgentWithStreaming(ctx, req, agent, t)
+	if err != nil {
+		o.renderer.PrintAgentEnd(agent)
+		return 0, 0, fmt.Errorf("bridge call failed: %w", err)
+	}
+
+	inputTokens += resp.InputTokens
+	outputTokens += resp.OutputTokens
+
+	// 5. Handle tool use loop (max 5 iterations to prevent runaway)
+	maxToolIterations := 5
+	for iteration := 0; len(resp.ToolCalls) > 0 && iteration < maxToolIterations; iteration++ {
+		for _, tc := range resp.ToolCalls {
+			o.renderer.PrintToolCall(agent, tc.Name, tc.Input)
+
+			result := ExecuteTool(tc.Name, tc.Input, t.CustomTools)
+			o.renderer.PrintToolResult(agent, tc.Name, result)
+
+			toolResultContent := fmt.Sprintf("[Tool Result - %s]: %s", tc.Name, result)
+			if err := o.eventBus.Post(sessionID, agent.Name, "user", toolResultContent); err != nil {
+				return inputTokens, outputTokens, fmt.Errorf("cannot post tool result: %w", err)
+			}
+		}
+
+		history, err = o.eventBus.GetHistory(sessionID, agent.MaxContext)
+		if err != nil {
+			return inputTokens, outputTokens, fmt.Errorf("cannot get updated history: %w", err)
+		}
+
+		req.Messages = o.formatMessages(t, history)
+
+		// Use non-streaming call for tool follow-ups (less text, more compact)
+		resp, err = o.bridge.Call(ctx, req)
+		if err != nil {
+			return inputTokens, outputTokens, fmt.Errorf("bridge call after tools failed: %w", err)
+		}
+
+		inputTokens += resp.InputTokens
+		outputTokens += resp.OutputTokens
+	}
+
+	// 6. Post the final response to the event bus (text already streamed)
+	if resp.Content != "" {
+		if err := o.eventBus.Post(sessionID, agent.Name, "assistant", resp.Content); err != nil {
+			return inputTokens, outputTokens, fmt.Errorf("cannot post agent response: %w", err)
+		}
+	}
+
+	o.renderer.PrintAgentEnd(agent)
+
+	return inputTokens, outputTokens, nil
+}
+
+// callAgentWithStreaming calls the agent with streaming, rendering text chunks
+// as they arrive. Returns the assembled AgentResponse.
+func (o *Orchestrator) callAgentWithStreaming(
+	ctx context.Context,
+	req bridge.AgentRequest,
+	agent team.Agent,
+	t *team.Team,
+) (*bridge.AgentResponse, error) {
+	req.Stream = true
+	var textBuffer strings.Builder
+
+	resp, err := o.bridge.CallStream(ctx, req, func(ev bridge.StreamEvent) {
+		switch ev.Type {
+		case "text":
+			o.renderer.PrintAgentText(agent, ev.Content)
+			textBuffer.WriteString(ev.Content)
+		case "tool_call":
+			// Handled via CallStream return
+		case "done":
+			// Tokens tracked via response
+		case "error":
+			// Handled via error return
+		}
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// If streaming produced text but response has none, fill it in
+	if resp.Content == "" && textBuffer.Len() > 0 {
+		resp.Content = textBuffer.String()
+	}
+
+	return resp, nil
+}
+
+// formatMessages converts event bus history into bridge message payloads.
+func (o *Orchestrator) formatMessages(t *team.Team, history []bus.Message) []bridge.MessagePayload {
 	messages := make([]bridge.MessagePayload, len(history))
 	for i, msg := range history {
 		content := msg.Content
@@ -193,106 +320,57 @@ func (o *Orchestrator) runAgentTurn(
 			Name:    msg.AgentName,
 		}
 	}
+	return messages
+}
 
-	// 3. Build the agent request
-	customToolDefs := make([]bridge.CustomToolDef, len(t.CustomTools))
+// buildCustomToolDefs converts team custom tools to bridge custom tool defs.
+func (o *Orchestrator) buildCustomToolDefs(t *team.Team) []bridge.CustomToolDef {
+	defs := make([]bridge.CustomToolDef, len(t.CustomTools))
 	for i, ct := range t.CustomTools {
-		customToolDefs[i] = bridge.CustomToolDef{
+		defs[i] = bridge.CustomToolDef{
 			Name:        ct.Name,
 			Description: ct.Description,
 			InputSchema: ct.InputSchema,
 		}
 	}
-	req := bridge.AgentRequest{
-		Provider:    agent.Provider,
-		Model:       agent.Model,
-		System:      agent.SystemPrompt,
-		Messages:    messages,
-		Tools:       agent.Tools,
-		CustomTools: customToolDefs,
-		MaxTokens:   t.Workflow.MaxTokens,
-	}
+	return defs
+}
 
-	// Render agent start
-	o.renderer.PrintAgentStart(agent)
-
-	// 4. Call the agent engine
-	resp, err := o.bridge.Call(ctx, req)
+// saveSessionMemory gets the full session transcript and saves a memory summary.
+// Errors are logged via the renderer but do not propagate (best-effort).
+func (o *Orchestrator) saveSessionMemory(ctx context.Context, t *team.Team, sessionID, task string) {
+	messages, err := o.eventBus.GetAllMessages(sessionID)
 	if err != nil {
-		o.renderer.PrintAgentEnd(agent)
-		return 0, 0, fmt.Errorf("bridge call failed: %w", err)
+		o.renderer.PrintInfo(fmt.Sprintf("Memory: cannot load session history: %s", err))
+		return
 	}
 
-	inputTokens += resp.InputTokens
-	outputTokens += resp.OutputTokens
-
-	// 5. Handle tool use loop (max 5 iterations to prevent runaway)
-	maxToolIterations := 5
-	for iteration := 0; len(resp.ToolCalls) > 0 && iteration < maxToolIterations; iteration++ {
-		// Execute each tool call
-		for _, tc := range resp.ToolCalls {
-			o.renderer.PrintToolCall(agent, tc.Name, tc.Input)
-
-			// Execute the tool (built-in or custom)
-			result := ExecuteTool(tc.Name, tc.Input, t.CustomTools)
-			o.renderer.PrintToolResult(agent, tc.Name, result)
-
-			// Post tool result as a message
-			toolResultContent := fmt.Sprintf("[Tool Result - %s]: %s", tc.Name, result)
-			if err := o.eventBus.Post(sessionID, agent.Name, "user", toolResultContent); err != nil {
-				return inputTokens, outputTokens, fmt.Errorf("cannot post tool result: %w", err)
-			}
-		}
-
-		// Get updated history after tool results
-		history, err = o.eventBus.GetHistory(sessionID, agent.MaxContext)
-		if err != nil {
-			return inputTokens, outputTokens, fmt.Errorf("cannot get updated history: %w", err)
-		}
-
-		// Rebuild messages
-		messages = make([]bridge.MessagePayload, len(history))
-		for i, msg := range history {
-			content := msg.Content
-			if msg.AgentName != "user" {
-				content = fmt.Sprintf("[%s · %s]: %s",
-					msg.AgentName,
-					getAgentRole(t, msg.AgentName),
-					msg.Content,
-				)
-			}
-			messages[i] = bridge.MessagePayload{
-				Role:    msg.Role,
-				Content: content,
-				Name:    msg.AgentName,
-			}
-		}
-
-		// Call again with tool results
-		req.Messages = messages
-		resp, err = o.bridge.Call(ctx, req)
-		if err != nil {
-			return inputTokens, outputTokens, fmt.Errorf("bridge call after tools failed: %w", err)
-		}
-
-		inputTokens += resp.InputTokens
-		outputTokens += resp.OutputTokens
+	transcript := o.formatTranscript(messages)
+	if transcript == "" {
+		return
 	}
 
-	// 6. Render and post the final text response
-	if resp.Content != "" {
-		o.renderer.PrintAgentText(agent, resp.Content)
-
-		// Post to the event bus
-		if err := o.eventBus.Post(sessionID, agent.Name, "assistant", resp.Content); err != nil {
-			return inputTokens, outputTokens, fmt.Errorf("cannot post agent response: %w", err)
-		}
+	entry, err := o.memorySummarizer.SummarizeSession(ctx, t.Name, sessionID, task, transcript)
+	if err != nil {
+		o.renderer.PrintInfo(fmt.Sprintf("Memory: summarization skipped: %s", err))
+		return
 	}
 
-	// Render agent end
-	o.renderer.PrintAgentEnd(agent)
+	o.renderer.PrintInfo(fmt.Sprintf("Memory: saved summary for this session (%.0f tokens)", float64(len(entry.Summary))/4))
+}
 
-	return inputTokens, outputTokens, nil
+// formatTranscript converts event bus messages into a plain-text transcript
+// suitable for LLM summarization.
+func (o *Orchestrator) formatTranscript(messages []bus.Message) string {
+	var b strings.Builder
+	for _, msg := range messages {
+		speaker := msg.AgentName
+		if speaker == "" {
+			speaker = msg.Role
+		}
+		b.WriteString(fmt.Sprintf("[%s]: %s\n", speaker, msg.Content))
+	}
+	return b.String()
 }
 
 // getAgentRole returns the role label for an agent by name, or "Agent" if not found.
@@ -308,6 +386,22 @@ func getAgentRole(t *team.Team, agentName string) string {
 type TokenStats struct {
 	InputTokens  int
 	OutputTokens int
+}
+
+// formatNumber formats an integer with comma separators for display.
+func formatNumber(n int) string {
+	if n < 1000 {
+		return fmt.Sprintf("%d", n)
+	}
+	s := fmt.Sprintf("%d", n)
+	out := make([]byte, 0, len(s)+len(s)/3)
+	for i, c := range s {
+		if i > 0 && (len(s)-i)%3 == 0 {
+			out = append(out, ',')
+		}
+		out = append(out, byte(c))
+	}
+	return string(out)
 }
 
 // MarshalToolCalls converts tool calls to JSON for storage in the event bus.

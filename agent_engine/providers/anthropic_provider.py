@@ -77,6 +77,68 @@ def _convert_tools(tools: list[dict]) -> list[dict]:
     return anthropic_tools
 
 
+has_streaming = True
+
+
+async def call_stream(
+    model: str,
+    system: str,
+    messages: list[dict],
+    tools: list[dict],
+    max_tokens: int,
+):
+    """Stream a response from Anthropic, yielding (type, data) tuples."""
+    client = _get_client()
+
+    kwargs = {
+        "model": model,
+        "max_tokens": max_tokens,
+        "system": system,
+        "messages": messages,
+    }
+
+    anthropic_tools = _convert_tools(tools) if tools else []
+    if anthropic_tools:
+        kwargs["tools"] = anthropic_tools
+
+    import anthropic
+
+    current_tool = None
+    try:
+        with client.messages.create(**kwargs, stream=True) as stream:
+            for event in stream:
+                if event.type == "content_block_delta" and hasattr(event.delta, "text") and event.delta.text:
+                    yield ("text", event.delta.text)
+                elif event.type == "content_block_start" and event.content_block.type == "tool_use":
+                    current_tool = {
+                        "name": event.content_block.name,
+                        "input": {},
+                        "id": event.content_block.id,
+                    }
+                elif event.type == "content_block_delta" and hasattr(event.delta, "partial_json"):
+                    if current_tool:
+                        import json
+                        try:
+                            current_tool["input"] = json.loads(event.delta.partial_json)
+                        except json.JSONDecodeError:
+                            pass
+                elif event.type == "message_delta" and hasattr(event, "usage"):
+                    yield ("done", {
+                        "input_tokens": getattr(event.usage, "input_tokens", 0),
+                        "output_tokens": getattr(event.usage, "output_tokens", 0),
+                    })
+                elif event.type == "message_stop":
+                    if current_tool:
+                        yield ("tool_call", current_tool)
+                        current_tool = None
+    except anthropic.AuthenticationError as e:
+        raise ValueError("Anthropic API key is invalid. Check your ANTHROPIC_API_KEY.") from e
+    except anthropic.RateLimitError as e:
+        raise ConnectionError("Anthropic API rate limit exceeded. Wait a moment and try again.") from e
+    except anthropic.APIConnectionError as e:
+        raise ConnectionError("Cannot connect to Anthropic API. Check your network connection.") from e
+
+
 async def call(
     model: str,
     system: str,

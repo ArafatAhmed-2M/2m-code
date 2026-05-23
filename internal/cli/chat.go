@@ -21,6 +21,7 @@ import (
 
 	"github.com/2mcode/2mcode/internal/bridge"
 	"github.com/2mcode/2mcode/internal/bus"
+	"github.com/2mcode/2mcode/internal/memory"
 	"github.com/2mcode/2mcode/internal/orchestrator"
 	"github.com/2mcode/2mcode/internal/team"
 )
@@ -105,6 +106,14 @@ func runChat(cmd *cobra.Command, args []string) error {
 
 	// Create the orchestrator
 	orch := orchestrator.New(eventBus, br, renderer)
+
+	// Attach persistent memory if available
+	if memDir, err := memoryDir(); err == nil {
+		if memStore, err := memory.NewFileStore(memDir); err == nil {
+			memSummarizer := memory.NewSummarizer(br, memStore)
+			orch.WithMemory(memSummarizer)
+		}
+	}
 
 	// Create the session
 	if err := eventBus.CreateSession(sessionID, teamName); err != nil {

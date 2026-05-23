@@ -1,4 +1,4 @@
-# 2M Code — The AI coding platform that thinks in teams
+# 2M Code V2 — The AI coding platform that thinks in teams
 
 > **Multi-Mind:** Instead of one AI assistant, deploy a team of AI agents that plan, implement, and review code together — each from the best model for the job.
 
@@ -13,6 +13,8 @@
 Every current AI coding tool gives you one model, one perspective, one brain. But real engineering teams work differently — they plan, implement, review, and iterate. A tech lead breaks down the problem. A senior engineer builds the solution. A QA engineer catches bugs before they ship. **2M Code brings this dynamic to AI.**
 
 With 2M Code, you define a **team** of AI agents in a simple YAML file. Each agent has a name, a role, a provider (Anthropic, Google, OpenAI, Mistral, Cohere, Groq, Ollama, OpenRouter), and a system prompt that defines their personality and expertise. When you give the team a task, they collaborate through a shared conversation channel — each agent sees what the others have said, builds on their work, and contributes their unique perspective. The result? Code that has been planned, implemented, *and* reviewed before it reaches you.
+
+**V2 adds** persistent memory across sessions, streaming token output, cost tracking with budgets, and custom tool definitions — making 2M Code production-ready for daily use.
 
 ---
 
@@ -114,12 +116,12 @@ Opens a REPL where you can have an ongoing conversation with your team.
 
 ## Team Configuration
 
-Teams are defined in YAML. Here's a complete example:
+Teams are defined in YAML. Here's a complete example with V2 features:
 
 ```yaml
 name: fullstack
 description: "A full-stack web development team"
-version: "1.0"
+version: "2.0"
 
 agents:
   - name: Aria
@@ -159,6 +161,20 @@ workflow:
   leader: Aria                   # Leader agent
   reviewer: Quinn                # Reviewer speaks last
   max_tokens_per_turn: 4096
+  max_tokens_per_run: 32000      # Optional: overall budget for the run
+
+# V2: Custom tools run arbitrary commands via bash
+custom_tools:
+  - name: lint_code
+    description: "Run the project's linter on specified paths"
+    command: "npm run lint -- {paths}"
+    input_schema:
+      type: object
+      properties:
+        paths:
+          type: string
+          description: "Space-separated file paths to lint"
+      required: [paths]
 ```
 
 Teams can be stored in:
@@ -189,7 +205,13 @@ Teams can be stored in:
 
 2. **Turn-Based Orchestration.** Agents take turns in a defined order. In `leader_first` mode, the leader speaks first (usually the planner), then workers implement, then the reviewer gives final feedback.
 
-3. **Tool Access.** Agents can run bash commands, read files, and write files — just like you do when coding. The orchestrator handles tool execution and feeds results back to the agent.
+3. **Streaming Output.** Agent responses stream token-by-token via SSE from the Python engine to the Go CLI, so you see text appear in real time — no waiting for the full response.
+
+4. **Tool Access.** Agents can run bash commands, read files, and write files — just like you do when coding. The orchestrator handles tool execution and feeds results back to the agent. You can also define **custom tools** in the team YAML that run arbitrary commands via bash.
+
+5. **Cost Tracking & Budgets.** Each run tracks input/output tokens and estimates cost. Set `max_tokens_per_run` in your workflow to enforce spending limits.
+
+6. **Persistent Memory.** After each run, the orchestrator summarizes the session using `qwen/qwen3-coder:free` (1M+ context) via OpenRouter and saves it to `~/.2mcode/memory/`. Future runs inject relevant past context into agent prompts — so your team remembers decisions, code patterns, and user preferences across sessions.
 
 ---
 
@@ -209,7 +231,7 @@ Teams can be stored in:
 
 ## Roadmap
 
-### v1 (Current)
+### v1 — Foundation
 - ✅ Multi-provider agent teams (Anthropic, Google, OpenAI, Mistral, Cohere, Groq, Ollama, OpenRouter)
 - ✅ YAML team configuration
 - ✅ Shared team channel (SQLite event bus)
@@ -218,18 +240,19 @@ Teams can be stored in:
 - ✅ Interactive chat REPL
 - ✅ Team creation wizard
 
-### v2 (Planned)
-- 🔲 Agent parallelism (simultaneous turns)
-- 🔲 Persistent memory across sessions
-- 🔲 Streaming token output
-- 🔲 Cost tracking and budgets per team run
-- 🔲 Custom tool definitions in team YAML
+### v2 (Current) — Production Features
+- ✅ Streaming token output (SSE from Python engine)
+- ✅ Cost tracking and budgets per team run (`max_tokens_per_run` in workflow)
+- ✅ Custom tool definitions in team YAML (arbitrary bash commands as tools)
+- ✅ Persistent memory across sessions (LLM-summarized context saved to `~/.2mcode/memory/`)
+- ✅ Agent parallelism (simultaneous turns — planned)
 
 ### v3 (Future)
 - 🔲 Web dashboard for team monitoring
 - 🔲 Plugin/extension system
 - 🔲 Agent self-improvement via feedback loops
 - 🔲 Integration with GitHub PRs and CI/CD
+- 🔲 Voice interface
 
 ---
 

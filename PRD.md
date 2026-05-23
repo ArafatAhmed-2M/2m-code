@@ -1,6 +1,6 @@
-# 2M Code — Product Requirements Document
-**Version:** 1.0.0  
-**Status:** Draft — Ready for Engineering  
+# 2M Code V2 — Product Requirements Document
+**Version:** 2.0.0  
+**Status:** Active  
 **Codename:** Multi-Mind  
 **Platform:** Google Antigravity  
 
@@ -37,7 +37,7 @@ A configurable team of agents — each specialized, each from the best model for
 
 ## 3. Goals & Non-Goals
 
-### Goals (v1)
+### Goals (v1) — Foundation
 - Ship a working CLI tool installable as a single binary
 - Support agent teams defined in YAML (name, role, provider, model, system prompt)
 - Support providers: Anthropic Claude, Google Gemini, OpenAI GPT, Mistral, Cohere, Groq, Ollama, OpenRouter
@@ -48,13 +48,18 @@ A configurable team of agents — each specialized, each from the best model for
 - Ship a `2m run <team> "<task>"` command for one-shot task execution
 - Ship a `2m chat <team>` interactive REPL
 
-### Non-Goals (v1)
-- Web UI or browser interface
-- Agent parallelism / simultaneous turns (v2)
-- Voice interface
-- Persistent memory across sessions (v2)
+### Goals (v2) — Production Features
+- **Streaming token output** — SSE streaming from Python engine to CLI for real-time text rendering
+- **Cost tracking & budgets** — Token counting per run, cost estimation, `max_tokens_per_run` budget enforcement
+- **Custom tools** — User-defined tools in team YAML that run arbitrary bash commands with env-var parameters
+- **Persistent memory** — LLM-based session summarization using OpenRouter qwen model, saved to `~/.2mcode/memory/`, injected into future agent prompts
+- **Agent parallelism** — Multiple agents running simultaneously (in progress)
+
+### Non-Goals (v1 + v2)
+- Web UI or browser interface (v3)
+- Voice interface (v3)
 - Fine-tuned or self-hosted models
-- Plugin marketplace
+- Plugin marketplace (v3)
 
 ---
 
@@ -108,13 +113,16 @@ A task is the user's instruction — e.g. "Build a REST API for user authenticat
 | US-01 | Developer | Install 2M Code with a single command | I can start using it immediately |
 | US-02 | Developer | Run `2m new-team` to create a team via wizard | I don't have to write YAML by hand |
 | US-03 | Developer | Run `2m run <team> "<task>"` | I can delegate a task to my agent team |
-| US-04 | Developer | Watch agents respond one by one in the terminal | I can follow the team's reasoning in real time |
+| US-04 | Developer | Watch agents respond token-by-token in real time | I can follow the team's reasoning as it happens |
 | US-05 | Developer | Use agents from different providers in one team | I get the best model for each role |
 | US-06 | Developer | Store team configs in my repo's `.2mcode/` folder | My team uses the same AI team setup |
 | US-07 | Developer | Run `2m chat <team>` for an interactive session | I can have an ongoing dialogue with my agent team |
 | US-08 | Developer | Give agents access to bash and file tools | Agents can read my codebase and write actual code |
 | US-09 | Developer | See each agent's name and role color-coded in output | I always know who is speaking |
 | US-10 | Developer | Set API keys per provider via env vars or config | I control my own credentials |
+| US-11 | Developer | Define custom tools in team YAML | My agents can run project-specific commands |
+| US-12 | Developer | Set a token budget for each run | I control costs and prevent runaway usage |
+| US-13 | Developer | Have agents remember past sessions | I don't have to repeat context every time |
 
 ---
 
@@ -126,10 +134,11 @@ A task is the user's instruction — e.g. "Build a REST API for user authenticat
 2m new-team              Interactive wizard to create a team YAML
 2m team list             List all configured teams
 2m team show <name>      Show team config details
-2m run <team> "<task>"   Run a one-shot task with a team
-2m chat <team>           Start an interactive REPL with a team
+2m run <team> "<task>"   Run a one-shot task with a team (streaming output)
+2m chat <team>           Start an interactive REPL with a team (streaming output)
 2m history <team>        Show last session's team channel log
 2m config set <key>      Set global config (default provider, etc.)
+2m models [provider]     List available models from all providers
 ```
 
 ### 7.2 Team YAML Schema
@@ -137,7 +146,7 @@ A task is the user's instruction — e.g. "Build a REST API for user authenticat
 ```yaml
 name: string                    # unique identifier
 description: string             # human-readable
-version: "1.0"
+version: "2.0"
 
 agents:
   - name: string                # display name
@@ -155,6 +164,19 @@ workflow:
   leader: string                # agent name (required for leader_first)
   reviewer: string              # agent name (optional, always speaks last)
   max_tokens_per_turn: int      # default 4096
+
+# V2: Custom tool definitions (optional)
+custom_tools:
+  - name: string                # tool name used in agent tool calls
+    description: string         # shown to LLM to explain when/how to use
+    command: string             # bash command template with {param} placeholders
+    input_schema:
+      type: object
+      properties:
+        param_name:
+          type: string
+          description: "..."
+      required: [param_name]
 ```
 
 ### 7.3 Provider Support
@@ -175,9 +197,10 @@ workflow:
 **bash** — Execute shell commands. Returns stdout + stderr. Timeout 30s.  
 **read_file** — Read a file from the project directory. Max 100KB.  
 **write_file** — Write or overwrite a file. Requires user confirmation if file exists.  
-**web_fetch** — Fetch a URL. Returns text content. Max 50KB.
+**web_fetch** — Fetch a URL. Returns text content. Max 50KB.  
+**custom_tools** — (V2) User-defined tools in team YAML. Runs arbitrary bash commands with `{param}` placeholders replaced by LLM-provided values. Parameters are also passed as uppercase env vars (e.g. `PATHS` for `paths`).
 
-Tools are opt-in per agent in the team YAML. The orchestrator handles tool execution in Go and injects results back into the agent's turn.
+Tools are opt-in per agent in the team YAML. The orchestrator handles tool execution in Go and injects results back into the agent's turn. Custom tools use a dedicated tool-use loop that substitutes parameters into the command template and executes via bash.
 
 ### 7.5 Team Channel (Event Bus) Specification
 
@@ -270,6 +293,7 @@ Communication between Go (orchestrator) and Python (agent engine) is over a loca
 
 ## 11. Milestones
 
+### v1 — Foundation
 | Milestone | Scope | Target |
 |---|---|---|
 | M0 — Foundation | Repo scaffold, Go CLI skeleton, Python FastAPI server, single-agent call working end-to-end | Week 1 |
@@ -278,6 +302,15 @@ Communication between Go (orchestrator) and Python (agent engine) is over a loca
 | M3 — Tools | bash, read_file, write_file tools with tool-use loop | Week 4 |
 | M4 — Polish | Streaming render, colors, `2m chat`, `2m history`, error handling | Week 5 |
 | M5 — Release | Binary packaging, install script, README, docs site | Week 6 |
+
+### v2 — Production Features
+| Milestone | Scope | Target |
+|---|---|---|
+| M6 — Custom Tools | User-defined tools in team YAML with bash execution | Complete |
+| M7 — Cost Tracking | Token counting, pricing table, budget enforcement | Complete |
+| M8 — Streaming | SSE streaming from Python engine, real-time token rendering | Complete |
+| M9 — Memory | Persistent session memory with LLM summarization | Complete |
+| M10 — Parallelism | Simultaneous agent turns | In progress |
 
 ---
 

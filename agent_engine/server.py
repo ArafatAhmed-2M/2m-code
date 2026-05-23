@@ -9,12 +9,13 @@ import logging
 import sys
 
 import uvicorn
+import json
+
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from pydantic import BaseModel, Field
-
-from agent import run_agent, list_all_models
+from agent import run_agent, run_agent_stream, list_all_models
 
 # Configure logging — never log credentials or secrets
 logging.basicConfig(
@@ -49,6 +50,7 @@ class AgentRequest(BaseModel):
     tools: list[str] = Field(default_factory=list, description="Enabled tool names")
     custom_tools: list[dict] = Field(default_factory=list, description="User-defined tool definitions (name, description, input_schema)")
     max_tokens: int = Field(default=4096, description="Max tokens for the response")
+    stream: bool = Field(default=False, description="If true, stream response via SSE")
 
 
 class AgentResponse(BaseModel):
@@ -85,14 +87,25 @@ async def get_models(providers: str | None = None):
     return await list_all_models(providers_filter=providers_filter)
 
 
-@app.post("/call", response_model=AgentResponse)
+@app.post("/call")
 async def call(req: AgentRequest):
     """
-    Call an LLM agent with the given provider, model, system prompt,
-    conversation history, and tool definitions.
+    Call an LLM agent. If req.stream is True, returns Server-Sent Events.
+    Otherwise, returns a JSON AgentResponse.
 
-    Returns the agent's text response and any tool call requests.
+    SSE events:
+      event: text\ndata: {"content": "..."}
+      event: tool_call\ndata: {"name": "...", "input": {...}, "id": "..."}
+      event: done\ndata: {"input_tokens": N, "output_tokens": N}
     """
+    if not req.stream:
+        return await _call_non_streaming(req)
+
+    return await _call_streaming(req)
+
+
+async def _call_non_streaming(req: AgentRequest) -> AgentResponse:
+    """Non-streaming call: return a complete AgentResponse."""
     try:
         result = await run_agent(req)
         return AgentResponse(**result)
@@ -109,7 +122,6 @@ async def call(req: AgentRequest):
         logger.error("Provider connection failed: %s", str(e))
         status_code = 502
         detail = str(e)
-        # Rate limit errors (raised as ConnectionError by providers) should be 429
         if "rate" in detail.lower() or "quota" in detail.lower() or "credit" in detail.lower():
             status_code = 429
         raise HTTPException(status_code=status_code, detail=detail) from e
@@ -119,6 +131,34 @@ async def call(req: AgentRequest):
             status_code=504,
             detail=f"Request to {req.provider} timed out. Try again or use a faster model.",
         ) from e
+
+
+async def _call_streaming(req: AgentRequest):
+    """Streaming call: return a StreamingResponse with SSE events."""
+    async def event_stream():
+        try:
+            async for event_type, data in run_agent_stream(req):
+                if event_type == "done":
+                    yield f"event: done\ndata: {json.dumps(data)}\n\n"
+                    return
+                yield f"event: {event_type}\ndata: {json.dumps(data)}\n\n"
+        except KeyError as e:
+            yield f"event: error\ndata: {json.dumps({'detail': str(e)})}\n\n"
+        except ValueError as e:
+            yield f"event: error\ndata: {json.dumps({'detail': str(e)})}\n\n"
+        except ConnectionError as e:
+            yield f"event: error\ndata: {json.dumps({'detail': str(e)})}\n\n"
+        except TimeoutError as e:
+            yield f"event: error\ndata: {json.dumps({'detail': str(e)})}\n\n"
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 # TODO(security): In production deployment, consider adding rate limiting

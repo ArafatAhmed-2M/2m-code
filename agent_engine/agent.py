@@ -102,6 +102,69 @@ async def run_agent(req) -> dict:
     return result
 
 
+async def run_agent_stream(req):
+    """
+    Stream an agent response, yielding (event_type, data) tuples.
+
+    Event types:
+      - "text": data is a text chunk
+      - "tool_call": data is {name, input, id}
+      - "done": data is {input_tokens, output_tokens}
+
+    Falls back to non-streaming if the provider doesn't support streaming.
+    """
+    if req.provider not in PROVIDERS:
+        supported = ", ".join(sorted(PROVIDERS.keys()))
+        raise KeyError(f"Unknown provider: '{req.provider}'. Supported providers: {supported}")
+
+    provider = PROVIDERS[req.provider]
+
+    # Check if provider has streaming support
+    call_stream_fn = getattr(provider, "call_stream", None)
+    has_streaming = getattr(provider, "has_streaming", False)
+
+    # Build tool definitions
+    tools = get_tool_definitions(req.tools)
+    for ct in req.custom_tools:
+        tools.append(ct)
+
+    messages = [
+        {"role": msg.role, "content": msg.content}
+        for msg in req.messages
+    ]
+
+    logger.info(
+        "Streaming request: provider=%s model=%s tools=%s message_count=%d",
+        req.provider, req.model, req.tools, len(messages),
+    )
+
+    if has_streaming and call_stream_fn:
+        async for event_type, data in call_stream_fn(
+            model=req.model,
+            system=req.system,
+            messages=messages,
+            tools=tools,
+            max_tokens=req.max_tokens,
+        ):
+            yield (event_type, data)
+    else:
+        # Fallback: non-streaming, yield entire response as one chunk
+        result = await provider.call(
+            model=req.model,
+            system=req.system,
+            messages=messages,
+            tools=tools,
+            max_tokens=req.max_tokens,
+        )
+        yield ("text", result.get("content", ""))
+        for tc in result.get("tool_calls", []):
+            yield ("tool_call", tc)
+        yield ("done", {
+            "input_tokens": result.get("input_tokens", 0),
+            "output_tokens": result.get("output_tokens", 0),
+        })
+
+
 async def list_all_models(providers_filter: list[str] | None = None) -> dict:
     """
     Fetch available models from all (or a subset of) providers concurrently.

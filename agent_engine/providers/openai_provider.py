@@ -89,6 +89,88 @@ def _convert_tools_to_openai(tools: list[dict]) -> list[dict]:
     return openai_tools
 
 
+has_streaming = True
+
+
+async def call_stream(
+    model: str,
+    system: str,
+    messages: list[dict],
+    tools: list[dict],
+    max_tokens: int,
+):
+    """Stream a response from OpenAI, yielding (type, data) tuples."""
+    client = _get_client()
+
+    openai_messages = [{"role": "system", "content": system}]
+    openai_messages.extend(messages)
+
+    kwargs = {
+        "model": model,
+        "max_tokens": max_tokens,
+        "messages": openai_messages,
+        "stream": True,
+    }
+
+    openai_tools = _convert_tools_to_openai(tools)
+    if openai_tools:
+        kwargs["tools"] = openai_tools
+        kwargs["tool_choice"] = "auto"
+
+    import json
+
+    collected_tool_calls = {}
+    try:
+        stream = client.chat.completions.create(**kwargs)
+        for chunk in stream:
+            choice = chunk.choices[0] if chunk.choices else None
+            if not choice:
+                continue
+
+            delta = choice.delta
+
+            if delta.content:
+                yield ("text", delta.content)
+
+            if delta.tool_calls:
+                for tc in delta.tool_calls:
+                    idx = tc.index
+                    if idx not in collected_tool_calls:
+                        collected_tool_calls[idx] = {"name": "", "arguments": "", "id": ""}
+                    if tc.id:
+                        collected_tool_calls[idx]["id"] = tc.id
+                    if tc.function and tc.function.name:
+                        collected_tool_calls[idx]["name"] = tc.function.name
+                    if tc.function and tc.function.arguments:
+                        collected_tool_calls[idx]["arguments"] += tc.function.arguments
+
+            if chunk.usage:
+                yield ("done", {
+                    "input_tokens": chunk.usage.prompt_tokens or 0,
+                    "output_tokens": chunk.usage.completion_tokens or 0,
+                })
+
+        # After stream ends, yield collected tool calls
+        for tc in collected_tool_calls.values():
+            if tc["name"]:
+                try:
+                    args = json.loads(tc["arguments"]) if tc["arguments"] else {}
+                except json.JSONDecodeError:
+                    args = {}
+                yield ("tool_call", {
+                    "name": tc["name"],
+                    "input": args,
+                    "id": tc["id"] or f"openai_{tc['name']}_0",
+                })
+
+    except openai.AuthenticationError as e:
+        raise ValueError("OpenAI API key is invalid. Check your OPENAI_API_KEY.") from e
+    except openai.RateLimitError as e:
+        raise ConnectionError("OpenAI API rate limit exceeded. Wait a moment and try again.") from e
+    except openai.APIConnectionError as e:
+        raise ConnectionError("Cannot connect to OpenAI API. Check your network connection.") from e
+
+
 async def call(
     model: str,
     system: str,
