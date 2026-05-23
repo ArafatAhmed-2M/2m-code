@@ -48,11 +48,12 @@ type Agent struct {
 
 // Workflow defines how agents take turns and collaborate.
 type Workflow struct {
-	Orchestration string `yaml:"orchestration"`      // leader_first | round_robin | free
-	TurnsPerTask  int    `yaml:"turns_per_task"`      // Rounds of agent turns per task
-	Leader        string `yaml:"leader"`              // Agent name (required for leader_first)
-	Reviewer      string `yaml:"reviewer"`            // Agent name (optional, always speaks last)
-	MaxTokens     int    `yaml:"max_tokens_per_turn"` // Default 4096
+	Orchestration  string `yaml:"orchestration"`       // leader_first | round_robin | free
+	TurnsPerTask   int    `yaml:"turns_per_task"`       // Rounds of agent turns per task
+	Leader         string `yaml:"leader"`               // Agent name (required for leader_first)
+	Reviewer       string `yaml:"reviewer"`             // Agent name (optional, always speaks last)
+	MaxTokens      int    `yaml:"max_tokens_per_turn"`  // Default 4096
+	MaxTokensPerRun int   `yaml:"max_tokens_per_run"`  // Total budget (0 = unlimited)
 }
 
 // validProviders lists all supported LLM providers.
@@ -314,6 +315,9 @@ func (t *Team) Validate() error {
 	}
 	if t.Workflow.MaxTokens == 0 {
 		t.Workflow.MaxTokens = 4096
+	}
+	if t.Workflow.MaxTokensPerRun < 0 {
+		t.Workflow.MaxTokensPerRun = 0
 	}
 
 	return nil

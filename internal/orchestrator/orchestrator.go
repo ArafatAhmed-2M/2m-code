@@ -37,7 +37,7 @@ type Renderer interface {
 	PrintToolResult(agent team.Agent, toolName string, result string)
 
 	// PrintSummary shows the task completion summary.
-	PrintSummary(turns int, totalInputTokens int, totalOutputTokens int, duration time.Duration)
+	PrintSummary(turns int, totalInputTokens int, totalOutputTokens int, costUSD float64, duration time.Duration)
 
 	// PrintError shows an error message.
 	PrintError(msg string)
@@ -90,11 +90,23 @@ func (o *Orchestrator) RunTask(ctx context.Context, t *team.Team, sessionID, tas
 	schedule := BuildSchedule(t)
 
 	// Execute each turn
+	budgetExceeded := false
 	for _, agentName := range schedule {
+		if budgetExceeded {
+			break
+		}
+
 		agent := t.GetAgent(agentName)
 		if agent == nil {
 			o.renderer.PrintError(fmt.Sprintf("Agent '%s' not found in team — skipping", agentName))
 			continue
+		}
+
+		// Check token budget before this turn
+		if t.Workflow.MaxTokensPerRun > 0 && (totalInputTokens+totalOutputTokens) >= t.Workflow.MaxTokensPerRun {
+			o.renderer.PrintInfo(fmt.Sprintf("Token budget of %s exceeded — ending run early", formatNumber(t.Workflow.MaxTokensPerRun)))
+			budgetExceeded = true
+			break
 		}
 
 		input, output, err := o.runAgentTurn(ctx, t, sessionID, *agent)
@@ -108,9 +120,10 @@ func (o *Orchestrator) RunTask(ctx context.Context, t *team.Team, sessionID, tas
 		turnCount++
 	}
 
-	// Print completion summary
+	// Print completion summary with cost estimate
 	duration := time.Since(startTime)
-	o.renderer.PrintSummary(turnCount, totalInputTokens, totalOutputTokens, duration)
+	costUSD := EstimateCost(t.Agents[0].Model, totalInputTokens, totalOutputTokens)
+	o.renderer.PrintSummary(turnCount, totalInputTokens, totalOutputTokens, costUSD, duration)
 
 	return nil
 }

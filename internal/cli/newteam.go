@@ -163,6 +163,14 @@ func runNewTeam(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	budgetStr := prompt(scanner, promptStyle.Render("  Max tokens per run (0 = unlimited, default: 0): "))
+	budget := 0
+	if budgetStr != "" {
+		if parsed, err := strconv.Atoi(budgetStr); err == nil && parsed >= 0 {
+			budget = parsed
+		}
+	}
+
 	// Build the team
 	t := &team.Team{
 		Name:        teamName,
@@ -170,11 +178,12 @@ func runNewTeam(cmd *cobra.Command, args []string) error {
 		Version:     "1.0",
 		Agents:      agents,
 		Workflow: team.Workflow{
-			Orchestration: orchestration,
-			TurnsPerTask:  turns,
-			Leader:        leader,
-			Reviewer:      reviewer,
-			MaxTokens:     4096,
+			Orchestration:   orchestration,
+			TurnsPerTask:    turns,
+			Leader:          leader,
+			Reviewer:        reviewer,
+			MaxTokens:       4096,
+			MaxTokensPerRun: budget,
 		},
 	}
 

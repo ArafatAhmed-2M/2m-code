@@ -166,17 +166,23 @@ func (r *TerminalRenderer) PrintToolResult(agent team.Agent, toolName string, re
 
 // PrintSummary renders the task completion summary.
 //
-//	✓ Team completed task in 4 turns · 3,241 tokens · 12.3s
-func (r *TerminalRenderer) PrintSummary(turns int, inputTokens int, outputTokens int, duration time.Duration) {
+//	✓ Team completed task in 4 turns · 3,241 tokens · 12.3s ($0.012)
+func (r *TerminalRenderer) PrintSummary(turns int, inputTokens int, outputTokens int, costUSD float64, duration time.Duration) {
 	totalTokens := inputTokens + outputTokens
 
 	summaryStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("10")). // Green
 		Bold(true)
 
-	summary := fmt.Sprintf("✓ Team completed task in %d turns · %s tokens · %s",
+	costStr := ""
+	if costUSD > 0 {
+		costStr = fmt.Sprintf(" (%s)", formatCostUSD(costUSD))
+	}
+
+	summary := fmt.Sprintf("✓ Team completed task in %d turns · %s tokens%s · %s",
 		turns,
 		formatNumber(totalTokens),
+		costStr,
 		formatDuration(duration),
 	)
 
@@ -314,4 +320,18 @@ func formatDuration(d time.Duration) string {
 		return fmt.Sprintf("%.1fs", d.Seconds())
 	}
 	return fmt.Sprintf("%.1fm", d.Minutes())
+}
+
+// formatCostUSD formats a USD cost for display.
+func formatCostUSD(cost float64) string {
+	switch {
+	case cost >= 1.0:
+		return fmt.Sprintf("$%.2f", cost)
+	case cost >= 0.01:
+		return fmt.Sprintf("$%.3f", cost)
+	case cost >= 0.0001:
+		return fmt.Sprintf("$%.4f", cost)
+	default:
+		return "<$0.0001"
+	}
 }
