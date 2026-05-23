@@ -16,14 +16,22 @@ import (
 	"time"
 )
 
+// CustomToolDef is the JSON representation of a custom tool sent to the agent engine.
+type CustomToolDef struct {
+	Name        string      `json:"name"`
+	Description string      `json:"description"`
+	InputSchema map[string]interface{} `json:"input_schema"`
+}
+
 // AgentRequest is the JSON body sent to the Python agent engine's /call endpoint.
 type AgentRequest struct {
-	Provider  string            `json:"provider"`   // anthropic|google|openai|mistral|cohere|groq|ollama|openrouter
-	Model     string            `json:"model"`      // Provider-specific model ID
-	System    string            `json:"system"`     // System prompt
-	Messages  []MessagePayload  `json:"messages"`   // Conversation history
-	Tools     []string          `json:"tools"`      // Enabled tool names
-	MaxTokens int               `json:"max_tokens"` // Max response tokens
+	Provider    string            `json:"provider"`     // anthropic|google|openai|mistral|cohere|groq|ollama|openrouter
+	Model       string            `json:"model"`        // Provider-specific model ID
+	System      string            `json:"system"`       // System prompt
+	Messages    []MessagePayload  `json:"messages"`     // Conversation history
+	Tools       []string          `json:"tools"`        // Enabled tool names
+	CustomTools []CustomToolDef   `json:"custom_tools"` // User-defined tool definitions (optional)
+	MaxTokens   int               `json:"max_tokens"`   // Max response tokens
 }
 
 // MessagePayload is a single message in the conversation sent to the engine.

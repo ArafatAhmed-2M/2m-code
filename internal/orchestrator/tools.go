@@ -18,6 +18,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/2mcode/2mcode/internal/team"
 )
 
 const (
@@ -29,8 +31,8 @@ const (
 )
 
 // ExecuteTool runs a tool by name with the given input parameters.
-// Returns the tool's output as a string.
-func ExecuteTool(name string, input map[string]interface{}) string {
+// Falls through to custom tools if the name doesn't match a built-in.
+func ExecuteTool(name string, input map[string]interface{}, customTools []team.CustomTool) string {
 	switch name {
 	case "bash":
 		return executeBash(input)
@@ -39,10 +41,69 @@ func ExecuteTool(name string, input map[string]interface{}) string {
 	case "write_file":
 		return executeWriteFile(input)
 	case "web_fetch":
-		// Web fetch is handled by the Python engine
 		return "web_fetch is handled by the agent engine"
 	default:
+		return executeCustomTool(name, input, customTools)
+	}
+}
+
+// executeCustomTool finds a custom tool by name and runs its command via bash,
+// passing input parameters as environment variables (uppercased).
+func executeCustomTool(name string, input map[string]interface{}, customTools []team.CustomTool) string {
+	var ct *team.CustomTool
+	for i := range customTools {
+		if customTools[i].Name == name {
+			ct = &customTools[i]
+			break
+		}
+	}
+	if ct == nil {
 		return fmt.Sprintf("Unknown tool: %s. Available: bash, read_file, write_file, web_fetch", name)
+	}
+
+	// Build environment variables from input params (uppercased keys)
+	env := os.Environ()
+	for k, v := range input {
+		key := strings.ToUpper(k)
+		val := fmt.Sprintf("%v", v)
+		env = append(env, fmt.Sprintf("%s=%s", key, val))
+	}
+
+	shell := "bash"
+	shellFlag := "-c"
+	if os.PathSeparator == '\\' {
+		shell = "cmd.exe"
+		shellFlag = "/C"
+	}
+
+	cmd := exec.Command(shell, shellFlag, ct.Command)
+	cmd.Dir, _ = os.Getwd()
+	cmd.Env = env
+
+	done := make(chan error, 1)
+	var output []byte
+	var cmdErr error
+
+	go func() {
+		output, cmdErr = cmd.CombinedOutput()
+		done <- cmdErr
+	}()
+
+	select {
+	case <-time.After(bashTimeout):
+		if cmd.Process != nil {
+			cmd.Process.Kill()
+		}
+		return fmt.Sprintf("Custom tool '%s' timed out after %s", name, bashTimeout)
+	case <-done:
+		result := string(output)
+		if cmdErr != nil {
+			result += fmt.Sprintf("\n[exit code: %s]", cmdErr.Error())
+		}
+		if result == "" {
+			result = "[no output]"
+		}
+		return result
 	}
 }
 

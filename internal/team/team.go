@@ -16,13 +16,22 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// CustomTool defines a user-provided tool available to agents in a team.
+type CustomTool struct {
+	Name        string      `yaml:"name"`         // Unique tool name
+	Description string      `yaml:"description"`  // Description shown to the LLM
+	InputSchema map[string]interface{} `yaml:"input_schema"` // JSON schema for tool parameters
+	Command     string      `yaml:"command"`      // Bash command to execute; params passed as env vars
+}
+
 // Team represents a configured group of AI agents and their workflow.
 type Team struct {
-	Name        string   `yaml:"name"`        // Unique identifier
-	Description string   `yaml:"description"` // Human-readable description
-	Version     string   `yaml:"version"`     // Config version (e.g., "1.0")
-	Agents      []Agent  `yaml:"agents"`      // List of agents in this team
-	Workflow    Workflow `yaml:"workflow"`     // Orchestration configuration
+	Name        string      `yaml:"name"`        // Unique identifier
+	Description string      `yaml:"description"` // Human-readable description
+	Version     string      `yaml:"version"`     // Config version (e.g., "1.0")
+	Agents      []Agent     `yaml:"agents"`      // List of agents in this team
+	Workflow    Workflow    `yaml:"workflow"`     // Orchestration configuration
+	CustomTools []CustomTool `yaml:"custom_tools"` // User-defined tools (optional)
 }
 
 // Agent represents a single AI agent within a team.
@@ -209,6 +218,32 @@ func (t *Team) Validate() error {
 		return fmt.Errorf("team must have at least one agent")
 	}
 
+	// Build set of valid tool names: built-in + custom tools from this team
+	allValidTools := make(map[string]bool)
+	for k, v := range validTools {
+		allValidTools[k] = v
+	}
+	customToolNames := make(map[string]bool)
+	for _, ct := range t.CustomTools {
+		if ct.Name == "" {
+			return fmt.Errorf("custom_tool has empty name")
+		}
+		if customToolNames[ct.Name] {
+			return fmt.Errorf("duplicate custom_tool name: %s", ct.Name)
+		}
+		customToolNames[ct.Name] = true
+		if ct.Description == "" {
+			return fmt.Errorf("custom_tool '%s' has no description", ct.Name)
+		}
+		if ct.Command == "" {
+			return fmt.Errorf("custom_tool '%s' has no command", ct.Name)
+		}
+		if ct.InputSchema == nil {
+			ct.InputSchema = map[string]interface{}{"type": "object", "properties": map[string]interface{}{}}
+		}
+		allValidTools[ct.Name] = true
+	}
+
 	agentNames := make(map[string]bool)
 	for i, agent := range t.Agents {
 		if agent.Name == "" {
@@ -246,8 +281,8 @@ func (t *Team) Validate() error {
 		}
 
 		for _, tool := range agent.Tools {
-			if !validTools[tool] {
-				return fmt.Errorf("agent '%s' has invalid tool '%s' — use: bash, read_file, write_file, web_fetch", agent.Name, tool)
+			if !allValidTools[tool] {
+				return fmt.Errorf("agent '%s' has invalid tool '%s' — use: bash, read_file, write_file, web_fetch, or a custom_tool name", agent.Name, tool)
 			}
 		}
 	}

@@ -63,8 +63,11 @@ async def run_agent(req) -> dict:
 
     provider = PROVIDERS[req.provider]
 
-    # Build tool definitions for the requested tools
+    # Build tool definitions for the requested tools (built-in + custom)
     tools = get_tool_definitions(req.tools)
+    # Merge custom tool definitions into the tool list
+    for ct in req.custom_tools:
+        tools.append(ct)
 
     # Convert message objects to dicts for the provider
     messages = [

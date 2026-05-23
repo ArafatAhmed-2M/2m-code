@@ -47,6 +47,7 @@ class AgentRequest(BaseModel):
     system: str = Field(..., description="System prompt for the agent")
     messages: list[MessageItem] = Field(default_factory=list, description="Conversation history")
     tools: list[str] = Field(default_factory=list, description="Enabled tool names")
+    custom_tools: list[dict] = Field(default_factory=list, description="User-defined tool definitions (name, description, input_schema)")
     max_tokens: int = Field(default=4096, description="Max tokens for the response")
 
 

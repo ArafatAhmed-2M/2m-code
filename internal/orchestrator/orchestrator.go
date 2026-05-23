@@ -182,13 +182,22 @@ func (o *Orchestrator) runAgentTurn(
 	}
 
 	// 3. Build the agent request
+	customToolDefs := make([]bridge.CustomToolDef, len(t.CustomTools))
+	for i, ct := range t.CustomTools {
+		customToolDefs[i] = bridge.CustomToolDef{
+			Name:        ct.Name,
+			Description: ct.Description,
+			InputSchema: ct.InputSchema,
+		}
+	}
 	req := bridge.AgentRequest{
-		Provider:  agent.Provider,
-		Model:     agent.Model,
-		System:    agent.SystemPrompt,
-		Messages:  messages,
-		Tools:     agent.Tools,
-		MaxTokens: t.Workflow.MaxTokens,
+		Provider:    agent.Provider,
+		Model:       agent.Model,
+		System:      agent.SystemPrompt,
+		Messages:    messages,
+		Tools:       agent.Tools,
+		CustomTools: customToolDefs,
+		MaxTokens:   t.Workflow.MaxTokens,
 	}
 
 	// Render agent start
@@ -211,8 +220,8 @@ func (o *Orchestrator) runAgentTurn(
 		for _, tc := range resp.ToolCalls {
 			o.renderer.PrintToolCall(agent, tc.Name, tc.Input)
 
-			// Execute the tool
-			result := ExecuteTool(tc.Name, tc.Input)
+			// Execute the tool (built-in or custom)
+			result := ExecuteTool(tc.Name, tc.Input, t.CustomTools)
 			o.renderer.PrintToolResult(agent, tc.Name, result)
 
 			// Post tool result as a message
