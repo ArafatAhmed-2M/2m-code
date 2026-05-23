@@ -91,8 +91,10 @@ install_from_source() {
     info "Installing binary to $INSTALL_DIR..."
     if [ -w "$INSTALL_DIR" ]; then
         cp bin/2m "$INSTALL_DIR/2m"
+        chmod +x "$INSTALL_DIR/2m"
     else
         sudo cp bin/2m "$INSTALL_DIR/2m"
+        sudo chmod +x "$INSTALL_DIR/2m"
     fi
 
     # Copy agent engine to config directory

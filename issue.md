@@ -62,9 +62,10 @@
 
 **Problem:** The install script copies the binary to `/usr/local/bin/2m` but doesn't set executable permissions. Running `2m` gives `Permission denied`.
 
-**Workaround:** Run `sudo chmod +x /usr/local/bin/2m` after installation.
+**Fix:** Added `chmod +x` after `cp` in both the direct and `sudo` paths.
 
-**Status:** Needs fix — add `chmod +x` after the copy in the install script.
+**Commit:** `(pending — next push)`
+**Status:** ✅ Fixed
 
 ---
 
@@ -74,18 +75,20 @@
 
 **Problem:** When `2m` is run again while a previous instance is still running, the Python agent engine fails to bind to port 8765 with `[Errno 98] address already in use`.
 
-**Workaround:** Run `pkill -f agent_engine` before re-running.
+**Fix:** Added `killPort8765()` function in `main.go` that detects if port 8765 is in use, kills the owning process (`lsof`, `fuser`, or `taskkill` depending on OS), and waits for the port to be released before starting the new engine.
 
-**Status:** Needs fix — could kill previous Python process on startup or use a PID file.
+**Commit:** `(pending — next push)`
+**Status:** ✅ Fixed
 
 ---
 
 ## 7. Bash tool timeout blocks agent loop
 
-**File(s):** `agent_engine/tools/__init__.py`
+**File(s):** `agent_engine/tools/bash_tool.py`
 
-**Problem:** Commands like `python3 -m http.server 8000` that run indefinitely (servers, watchers) hit the 30-second timeout and get killed. The tool returns a timeout error instead of starting the server in the background.
+**Problem:** Commands like `python3 -m http.server 8000` that run indefinitely (servers, watchers) hit the 30-second timeout and get killed. Even with `&`, `subprocess.run` still waited and timed out.
 
-**Workaround:** Agents can use `command &` (background) but the tool still waits and times out.
+**Fix:** Added background command detection — if the command ends with `&`, `Popen` is used with `start_new_session=True` and returns immediately with the PID. The tool description was also updated to document this behavior.
 
-**Status:** Needs fix — background commands should return immediately with the PID.
+**Commit:** `(pending — next push)`
+**Status:** ✅ Fixed

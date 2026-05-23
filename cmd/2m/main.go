@@ -16,10 +16,12 @@ package main
 import (
 	"context"
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"syscall"
 	"time"
 
@@ -52,6 +54,9 @@ func main() {
 	}
 
 	// Start the Python agent engine
+	// First, kill any stale agent engine on port 8765 to prevent port conflicts
+	killPort8765()
+
 	engineCmd := exec.Command(pythonPath, enginePath)
 	engineCmd.Stdout = os.Stderr // Engine logs go to stderr
 	engineCmd.Stderr = os.Stderr
@@ -155,4 +160,39 @@ func findPython() string {
 		}
 	}
 	return ""
+}
+
+// killPort8765 kills any process listening on port 8765 to prevent port conflicts
+// when restarting the agent engine. This handles the case where a previous 2m
+// instance left a stale Python process running.
+func killPort8765() {
+	conn, err := net.DialTimeout("tcp", "127.0.0.1:8765", 500*time.Millisecond)
+	if err != nil {
+		return // Port is free, nothing to do
+	}
+	conn.Close()
+
+	fmt.Fprintf(os.Stderr, "Port 8765 is in use — attempting to stop stale agent engine...\n")
+
+	switch runtime.GOOS {
+	case "windows":
+		exec.Command("taskkill", "/F", "/IM", "python.exe", "/FI", "tcp eq 8765").Run()
+	default:
+		// Try lsof first, fall back to fuser
+		if err := exec.Command("sh", "-c", "lsof -ti:8765 | xargs kill -9 2>/dev/null").Run(); err != nil {
+			exec.Command("sh", "-c", "fuser -k 8765/tcp 2>/dev/null").Run()
+		}
+	}
+
+	// Wait for the port to be released
+	for i := 0; i < 10; i++ {
+		conn, err := net.DialTimeout("tcp", "127.0.0.1:8765", 200*time.Millisecond)
+		if err != nil {
+			return // Port is free now
+		}
+		conn.Close()
+		time.Sleep(200 * time.Millisecond)
+	}
+
+	fmt.Fprintf(os.Stderr, "Warning: could not free port 8765 — trying to start engine anyway...\n")
 }
