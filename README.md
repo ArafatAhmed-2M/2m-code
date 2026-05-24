@@ -200,7 +200,7 @@ Teams can be stored in:
 ## Supported Providers
 
 | Provider | Available Models (Examples) | Required Env Var | Notes |
-|---|---|---|---|---|
+|---|---|---|---|
 | **Anthropic** | `claude-3.5-sonnet`, `claude-3-opus` | `ANTHROPIC_API_KEY` | Best for complex reasoning and lead roles. |
 | **Google** | `gemini-1.5-pro`, `gemini-2.0-flash` | `GOOGLE_API_KEY` | Massive context window (up to 2M tokens). |
 | **OpenAI** | `gpt-4o`, `o1-preview` | `OPENAI_API_KEY` | Strong all-rounder. |
