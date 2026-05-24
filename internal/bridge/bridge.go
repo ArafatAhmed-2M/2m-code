@@ -51,6 +51,7 @@ type AgentRequest struct {
 	CustomTools []CustomToolDef   `json:"custom_tools,omitempty"` // User-defined tool definitions (optional)
 	MaxTokens   int               `json:"max_tokens"`   // Max response tokens
 	Stream      bool              `json:"stream"`       // Enable SSE streaming
+	BaseURL     string            `json:"base_url,omitempty"`    // API base URL (openai_compatible only)
 }
 
 // MessagePayload is a single message in the conversation sent to the engine.

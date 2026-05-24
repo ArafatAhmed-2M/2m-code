@@ -1,0 +1,53 @@
+name: test-openrouter
+description: "Test team using OpenRouter free models"
+version: "2.0"
+
+agents:
+  - name: Gemma
+    role: Tech Lead
+    provider: openrouter
+    model: google/gemma-4-31b-it:free
+    color: cyan
+    max_context: 20
+    tools:
+      - bash
+      - read_file
+      - write_file
+    system_prompt: |
+      You are Gemma, the Tech Lead. Break down tasks into clear steps,
+      define the technical approach, and coordinate the team.
+
+  - name: Qwen
+    role: Senior Engineer
+    provider: openrouter
+    model: qwen/qwen3-next-80b-a3b-instruct:free
+    color: green
+    max_context: 20
+    tools:
+      - bash
+      - read_file
+      - write_file
+    system_prompt: |
+      You are Qwen, the Senior Engineer. Implement features based on
+      the tech lead's plan. Write clean, working code.
+
+  - name: MiniMax
+    role: QA Engineer
+    provider: openrouter
+    model: minimax/minimax-m2.5:free
+    color: yellow
+    max_context: 20
+    tools:
+      - bash
+      - read_file
+    system_prompt: |
+      You are MiniMax, the QA Engineer. Review code for bugs, security
+      issues, and quality. Provide constructive feedback.
+
+workflow:
+  orchestration: leader_first
+  turns_per_task: 1
+  leader: Gemma
+  reviewer: MiniMax
+  max_tokens_per_turn: 4096
+  max_tokens_per_run: 32000

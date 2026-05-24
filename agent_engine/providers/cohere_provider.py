@@ -103,6 +103,7 @@ async def call(
     messages: list[dict],
     tools: list[dict],
     max_tokens: int,
+    **kwargs,
 ) -> dict:
     """
     Call the Cohere API and return a normalized response.

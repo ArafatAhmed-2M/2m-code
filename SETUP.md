@@ -1,3 +1,16 @@
+<div align="center">
+
+```
+██████╗ ███╗   ███╗     ██████╗ ██████╗ ██████╗ ███████╗
+╚════██╗████╗ ████║    ██╔════╝██╔═══██╗██╔══██╗██╔════╝
+ █████╔╝██╔████╔██║    ██║     ██║   ██║██║  ██║█████╗  
+██╔═══╝ ██║╚██╔╝██║    ██║     ██║   ██║██║  ██║██╔══╝  
+███████╗██║ ╚═╝ ██║    ╚██████╗╚██████╔╝██████╔╝███████╗
+╚══════╝╚═╝     ╚═╝     ╚═════╝ ╚═════╝ ╚═════╝ ╚══════╝
+```
+
+</div>
+
 # 2M Code — Setup Guide
 
 > Run AI agent teams on your machine. One setup, all platforms.
@@ -102,7 +115,7 @@ export GOOGLE_API_KEY="AIza..."         # Gemini models
 export MISTRAL_API_KEY="..."            # Mistral models
 export GROQ_API_KEY="gsk_..."           # Groq (fast, free tier)
 export COHERE_API_KEY="..."             # Command models
-# OpenAI-Compatible also needs: export OPENAI_COMPATIBLE_BASE_URL="https://api.deepseek.com"
+# OpenAI-Compatible: set base_url in team YAML (or env var): export OPENAI_COMPATIBLE_BASE_URL="https://api.deepseek.com"
 ```
 **Windows (PowerShell):**
 ```powershell
@@ -234,6 +247,13 @@ sudo cp bin/2m /usr/local/bin/2m
 # Build
 go build -o bin\2m.exe .\cmd\2m
 
+# The bin\ directory comes with a `2mcode.cmd` wrapper so you can
+# type "2mcode" from anywhere (PowerShell, CMD, or new terminals).
+# After adding to PATH, open a NEW terminal and run:
+#   2mcode --version
+# or:
+#   2m.exe --version
+
 # Add to PATH (PowerShell Admin):
 $env:Path += ";$PWD\bin"
 [Environment]::SetEnvironmentVariable("Path", $env:Path, "User")
@@ -251,7 +271,8 @@ $env:Path += ";$PWD\bin"
 | `API key not set` | Set one of the API key env vars above |
 | Provider not responding | Check your API key is valid and has credits |
 | Port 8765 in use | Kill the old process: `kill $(lsof -t -i:8765)` (macOS/Linux) or `Stop-Process -Id (Get-NetTCPConnection -LocalPort 8765).OwningProcess` (Windows) |
-| `command not found: 2m` | Run from project dir: `./bin/2m` (macOS/Linux) or `.\bin\2m.exe` (Windows) |
+| `command not found: 2m` | Run from project dir: `.\bin\2m.exe` or type `2mcode` (Windows); `./bin/2m` (macOS/Linux) |
+| Binary says "go-sqlite3 requires cgo" | Rebuild with `go build -o bin\2m.exe .\cmd\2m` — the project now uses a pure-Go SQLite driver |
 
 ---
 

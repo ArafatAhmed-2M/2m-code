@@ -1,3 +1,16 @@
+<div align="center">
+
+```
+██████╗ ███╗   ███╗     ██████╗ ██████╗ ██████╗ ███████╗
+╚════██╗████╗ ████║    ██╔════╝██╔═══██╗██╔══██╗██╔════╝
+ █████╔╝██╔████╔██║    ██║     ██║   ██║██║  ██║█████╗  
+██╔═══╝ ██║╚██╔╝██║    ██║     ██║   ██║██║  ██║██╔══╝  
+███████╗██║ ╚═╝ ██║    ╚██████╗╚██████╔╝██████╔╝███████╗
+╚══════╝╚═╝     ╚═╝     ╚═════╝ ╚═════╝ ╚═════╝ ╚══════╝
+```
+
+</div>
+
 # 2M Code — Issue Log
 
 > Every bug, error, and fix encountered during development.
@@ -224,3 +237,38 @@
 **Fix:** Added a new `openai_compatible` provider adapter that reads `OPENAI_COMPATIBLE_API_KEY` and `OPENAI_COMPATIBLE_BASE_URL` (default: `https://api.openai.com/v1`). Supports streaming, tool calling, and model listing via the generic OpenAI SDK. Registered in Go validation, Python router, env var mappings, and all documentation.
 
 **Commit:** `f0f3a1c`
+
+---
+
+## 19. Streaming renderer — per-chunk output produces fragmented display
+
+**File(s):** `internal/cli/renderer.go`
+
+**Problem:** `PrintAgentText()` printed every SSE chunk immediately on a new line. With multi-word chunks arriving from the streaming provider, each fragment appeared on its own line — e.g., `"Hello"` then `" world"` rendered as two lines instead of one. Empty responses (e.g., tool-only calls) produced a stray `│` character with no text.
+
+**Fix:** Added a text buffer per agent in `PrintAgentText` that accumulates chunks. The buffer is flushed (printed) only when a newline is encountered in the accumulated text or when `FlushAgentText()` is called at agent end. Whitespace-only output is suppressed entirely.
+
+**Commit:** `(pending)`
+
+---
+
+## 20. `base_url` config for `openai_compatible` provider
+
+**File(s):** `internal/team/team.go`, `internal/bridge/bridge.go`, `internal/orchestrator/orchestrator.go`, `internal/cli/newteam.go`, `agent_engine/server.py`, `agent_engine/agent.py`, `agent_engine/providers/openai_compatible_provider.py`, `agent_engine/providers/*.py` (all 8 others — added `**kwargs`)
+
+**Problem:** The `openai_compatible` provider only supported `base_url` via the `OPENAI_COMPATIBLE_BASE_URL` environment variable. This required users to set a global env var even when different teams used different endpoints (e.g., DeepSeek in one team, Together in another).
+
+**Fix:** Added `Agent.BaseURL` to the Go `Agent` struct (team YAML) and threaded it through the bridge → Python server → agent router → provider. The `openai_compatible_provider._get_client()` accepts an optional `base_url` parameter that takes precedence over the env var. All 8 other providers got `**kwargs` on their `call`/`call_stream` signatures so future provider-specific configs pass through without breaking them.
+
+**Usage in team YAML:**
+```yaml
+agents:
+  - name: Codex
+    provider: openai_compatible
+    model: deepseek-chat
+    base_url: https://api.deepseek.com
+```
+
+**Resolution order:** YAML `base_url` → `OPENAI_COMPATIBLE_BASE_URL` env var → `https://api.openai.com/v1`
+
+**Commit:** `(pending)`

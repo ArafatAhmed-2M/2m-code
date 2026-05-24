@@ -44,6 +44,7 @@ type Agent struct {
 	MaxContext   int      `yaml:"max_context"`   // Messages from team channel (default: 20)
 	Color        string   `yaml:"color"`         // Terminal color: red|yellow|green|blue|cyan|magenta
 	Tools        []string `yaml:"tools"`         // Enabled tools: bash, read_file, write_file, web_fetch
+	BaseURL      string   `yaml:"base_url"`      // API base URL (openai_compatible only); overrides OPENAI_COMPATIBLE_BASE_URL
 }
 
 // Workflow defines how agents take turns and collaborate.

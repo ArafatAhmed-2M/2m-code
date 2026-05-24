@@ -1,4 +1,17 @@
-# 2M Code V2 — The AI coding platform that thinks in teams
+<div align="center">
+
+```
+██████╗ ███╗   ███╗     ██████╗ ██████╗ ██████╗ ███████╗
+╚════██╗████╗ ████║    ██╔════╝██╔═══██╗██╔══██╗██╔════╝
+ █████╔╝██╔████╔██║    ██║     ██║   ██║██║  ██║█████╗  
+██╔═══╝ ██║╚██╔╝██║    ██║     ██║   ██║██║  ██║██╔══╝  
+███████╗██║ ╚═╝ ██║    ╚██████╗╚██████╔╝██████╔╝███████╗
+╚══════╝╚═╝     ╚═╝     ╚═════╝ ╚═════╝ ╚═════╝ ╚══════╝
+```
+
+</div>
+
+# 2M Code — The AI coding platform that thinks in teams
 
 > **Multi-Mind:** Instead of one AI assistant, deploy a team of AI agents that plan, implement, and review code together — each from the best model for the job.
 
@@ -193,11 +206,11 @@ Teams can be stored in:
 | **Anthropic** | `claude-3.5-sonnet`, `claude-3-opus` | `ANTHROPIC_API_KEY` | Best for complex reasoning and lead roles. |
 | **Google** | `gemini-1.5-pro`, `gemini-2.0-flash` | `GOOGLE_API_KEY` | Massive context window (up to 2M tokens). |
 | **OpenAI** | `gpt-4o`, `o1-preview` | `OPENAI_API_KEY` | Strong all-rounder. |
-| **OpenAI-Compatible** | Any OpenAI-compatible API | `OPENAI_COMPATIBLE_API_KEY` | Set `OPENAI_COMPATIBLE_BASE_URL` for DeepSeek, Together, xAI, Perplexity, Fireworks, GitHub Models, etc. |
+| **OpenAI-Compatible** | Any OpenAI-compatible API | `OPENAI_COMPATIBLE_API_KEY` | Set `base_url` in team YAML (or `OPENAI_COMPATIBLE_BASE_URL` env var) for DeepSeek, Together, xAI, Perplexity, Fireworks, GitHub Models, etc. |
 | **Mistral** | `mistral-large`, `codestral` | `MISTRAL_API_KEY` | Excellent code-specific models. |
 | **Cohere** | `command-r-plus`, `command-r` | `COHERE_API_KEY` | Strong tool-use and RAG capabilities. |
 | **Groq** | `llama3-70b-8192`, `mixtral-8x7b-32768` | `GROQ_API_KEY` | Ultra-fast LPU inference (500+ tokens/sec). |
-| **OpenRouter**| `anthropic/claude-3.5-sonnet`, etc. | `OPENROUTER_API_KEY` | Unified API for 200+ models. |
+| **OpenRouter** | `anthropic/claude-3.5-sonnet`, etc. | `OPENROUTER_API_KEY` | Unified API for 200+ models. |
 | **Ollama** | `llama3`, `mistral`, `codellama` | *None* | Runs locally and privately. Connects to `localhost:11434` |
 
 ---

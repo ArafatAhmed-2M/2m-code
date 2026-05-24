@@ -89,6 +89,7 @@ async def call(
     messages: list[dict],
     tools: list[dict],
     max_tokens: int,
+    **kwargs,
 ) -> dict:
     """
     Call a local Ollama model and return a normalized response.

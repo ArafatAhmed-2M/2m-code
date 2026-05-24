@@ -7,18 +7,22 @@ exposes an OpenAI-compatible chat completions endpoint.
 
 Usage (set in team YAML):
   provider: openai_compatible
+  base_url: https://api.deepseek.com       # optional, overrides env var
 
 Environment variables:
   OPENAI_COMPATIBLE_API_KEY  — API key for the provider
   OPENAI_COMPATIBLE_BASE_URL — Base URL (default: https://api.openai.com/v1)
 
+The `base_url` field in the team YAML takes precedence over the environment
+variable, allowing per-agent endpoint configuration within the same project.
+
 Examples:
-  DeepSeek:    OPENAI_COMPATIBLE_BASE_URL=https://api.deepseek.com
-  Together:    OPENAI_COMPATIBLE_BASE_URL=https://api.together.xyz/v1
-  xAI Grok:   OPENAI_COMPATIBLE_BASE_URL=https://api.x.ai/v1
-  Perplexity: OPENAI_COMPATIBLE_BASE_URL=https://api.perplexity.ai
-  Fireworks:  OPENAI_COMPATIBLE_BASE_URL=https://api.fireworks.ai/inference/v1
-  GitHub:     OPENAI_COMPATIBLE_BASE_URL=https://models.inference.ai.azure.com
+  DeepSeek:    base_url: https://api.deepseek.com
+  Together:    base_url: https://api.together.xyz/v1
+  xAI Grok:   base_url: https://api.x.ai/v1
+  Perplexity: base_url: https://api.perplexity.ai
+  Fireworks:  base_url: https://api.fireworks.ai/inference/v1
+  GitHub:     base_url: https://models.inference.ai.azure.com
 """
 
 import json
@@ -30,11 +34,16 @@ from openai import OpenAI, AuthenticationError, RateLimitError, APIConnectionErr
 logger = logging.getLogger("2mcode.providers.openai_compatible")
 
 _client = None
+_previous_base_url = None
 
 
-def _get_client() -> OpenAI:
-    global _client
-    if _client is not None:
+def _get_client(base_url: str = "") -> OpenAI:
+    global _client, _previous_base_url
+
+    resolved_url = base_url or os.environ.get("OPENAI_COMPATIBLE_BASE_URL", "https://api.openai.com/v1")
+    resolved_url = resolved_url.rstrip("/")
+
+    if _client is not None and resolved_url == _previous_base_url:
         return _client
 
     api_key = os.environ.get("OPENAI_COMPATIBLE_API_KEY")
@@ -44,10 +53,8 @@ def _get_client() -> OpenAI:
             "Set it with: export OPENAI_COMPATIBLE_API_KEY='your-key-here'"
         )
 
-    base_url = os.environ.get("OPENAI_COMPATIBLE_BASE_URL", "https://api.openai.com/v1")
-    base_url = base_url.rstrip("/")
-
-    _client = OpenAI(api_key=api_key, base_url=base_url)
+    _client = OpenAI(api_key=api_key, base_url=resolved_url)
+    _previous_base_url = resolved_url
     return _client
 
 
@@ -95,8 +102,10 @@ async def call_stream(
     messages: list[dict],
     tools: list[dict],
     max_tokens: int,
+    base_url: str = "",
+    **kwargs,
 ):
-    client = _get_client()
+    client = _get_client(base_url)
 
     openai_messages = [{"role": "system", "content": system}]
     openai_messages.extend(messages)
@@ -170,8 +179,10 @@ async def call(
     messages: list[dict],
     tools: list[dict],
     max_tokens: int,
+    base_url: str = "",
+    **kwargs,
 ) -> dict:
-    client = _get_client()
+    client = _get_client(base_url)
 
     openai_messages = [{"role": "system", "content": system}]
     openai_messages.extend(messages)

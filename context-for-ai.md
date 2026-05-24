@@ -1,22 +1,47 @@
+<div align="center">
+
+```
+██████╗ ███╗   ███╗     ██████╗ ██████╗ ██████╗ ███████╗
+╚════██╗████╗ ████║    ██╔════╝██╔═══██╗██╔══██╗██╔════╝
+ █████╔╝██╔████╔██║    ██║     ██║   ██║██║  ██║█████╗  
+██╔═══╝ ██║╚██╔╝██║    ██║     ██║   ██║██║  ██║██╔══╝  
+███████╗██║ ╚═╝ ██║    ╚██████╗╚██████╔╝██████╔╝███████╗
+╚══════╝╚═╝     ╚═╝     ╚═════╝ ╚═════╝ ╚═════╝ ╚══════╝
+```
+
+</div>
+
 # 2M Code — AI Session Context
 **Saved:** 2026-05-24  
 **Purpose:** Allows AI to resume work after context restart without losing state.
 
 ---
 
-## Session 2 Summary (V3 Begins)
+## Session 3 Summary (Polish & Config)
 
-This session **started V3** by building the **plugin/extension system (P0)**:
-- `agent_engine/plugin_base.py` — Plugin base class with lifecycle hooks
-- `agent_engine/plugin_loader.py` — Scans `~/.2mcode/plugins/` and `.2mcode/plugins/` for .py files
-- `agent.py` — Added `init_plugins()`, `shutdown_plugins()`, hook integration in `run_agent()` and `run_agent_stream()`
-- `server.py` — Startup/shutdown event hooks, `/plugins` endpoint
-- `internal/cli/plugin.go` — `2m plugin list` CLI command
-- `internal/bridge/bridge.go` — Added `StylePath()` helper
-- `.2mcode/plugins/turn_logger.py` — Example plugin that logs turns to a file
-- `.2mcode/plugins/context_injector.py` — Example plugin that injects coding guidelines
+This session **polished everything for GitHub push**:
 
-Previous work (Session 1): 8 bugs fixed, openai_compatible provider added, all docs updated.
+### Infrastructure
+- **`base_url` in team YAML** — `Agent.BaseURL` field added end-to-end: Go Agent struct → bridge → Python server → provider. Per-agent endpoint config for `openai_compatible`, overriding `OPENAI_COMPATIBLE_BASE_URL` env var.
+- **`**kwargs` on all providers** — Future provider-specific configs pass through without breaking other providers.
+- **Pure-Go SQLite** — Migrated to `modernc.org/sqlite`, no CGO/GCC needed on Windows.
+- **`2mcode` Windows launcher** — `bin/2mcode.cmd` on PATH allows typing `2mcode` from any terminal.
+
+### UX Fixes
+- **Streaming buffer** — `PrintAgentText` accumulates chunks and flushes on newlines; empty responses no longer produce stray `│` lines.
+- **Instant CLI** — Engine startup deferred for `--help`, `--version`, `new-team`, `team`, `config`, `completion`, and bare invocation.
+- **ASCII logo centered** — All 8 `.md` files use `<div align="center">` for the 2M CODE banner.
+
+### Documentation
+- All `.md` files updated with centered 2M CODE ASCII logo.
+- `agent.md` Bugs Fixed table expanded with all recent fixes + features.
+- `context-for-ai.md` updated with full live state.
+- `issue.md` updated with base_url entry.
+- `SETUP.md` updated with `base_url` YAML config note.
+
+### Previous Sessions
+- **Session 2 (V3 P0):** Plugin/extension system — `plugin_base.py`, `plugin_loader.py`, `2m plugin list` CLI, example plugins.
+- **Session 1:** 8 bugs fixed, `openai_compatible` provider added, all docs updated.
 
 ---
 
@@ -24,11 +49,12 @@ Previous work (Session 1): 8 bugs fixed, openai_compatible provider added, all d
 
 | Aspect | Status |
 |--------|--------|
-| Go build (`go build ./cmd/2m`) | ✅ Passes |
+| Go build (`go build ./cmd/2m`) | ✅ Passes (pure-Go SQLite, no CGO needed) |
 | Go vet (`go vet ./...`) | ✅ Passes |
 | Python syntax (all .py files) | ✅ Passes |
-| Last commit | `1c88de5` — placeholder (will be replaced) |
 | Branch | `main` |
+| Remote | `origin/main` — `https://github.com/ArafatAhmed-2M/2M-Code` |
+| V2 gaps closed | Streaming renderer ✅ — remaining: tests, history, web_fetch, chat budget |
 
 ---
 
@@ -40,7 +66,7 @@ Previous work (Session 1): 8 bugs fixed, openai_compatible provider added, all d
 | P1 | GitHub PR & CI/CD integration | 🔲 Not started |
 | P2 | Agent self-improvement loops | 🔲 Not started |
 | P3 | Web dashboard (read-only) | 🔲 Not started |
-| P4 | V2 gap closure (tests, history, web_fetch, streaming, chat budget) | 🔲 Not started |
+| P4 | V2 gap closure (tests, history, web_fetch, streaming, chat budget) | 🔶 In progress (streaming ✅) |
 
 ---
 
@@ -171,11 +197,36 @@ internal/cli/
 1. **GitHub PR Integration** — `2m github review <pr-url>`, webhook server
 2. **Agent self-improvement loops** — agents review each other's work
 3. **Web dashboard** — read-only session monitoring (FastAPI + Jinja2 + HTMX)
-4. **V2 gap closure** — tests, `2m history`, `web_fetch` fix, streaming fix, chat budget
+4. **V2 gap closure** — tests, `2m history`, `web_fetch` fix, chat budget (streaming ✅ done)
 
 ### V2 gaps (still open)
 - **Tests** — No test files exist in Go or Python
 - **`2m history` command** — Stub only in `internal/cli/team.go:173-186`
 - **`web_fetch` tool** — Go-side returns stub string instead of fetching URL
-- **Streaming renderer** — `PrintAgentText` prints every SSE chunk on new line
+- **Streaming renderer** — ✅ **FIXED** — buffers chunks and flushes on newlines
 - **Chat token budget** — `RunTask` enforces `MaxTokensPerRun` but `RunChatTurn` does not
+
+## Recent Fixes (Session: 2026-05-24)
+
+### Bugs Fixed (in chronological order)
+| # | File | Bug | Fix |
+|---|------|-----|-----|
+| 1 | `internal/cli/newteam.go:91` | `openai_compatible` missing from new-team wizard | Added to options list |
+| 2 | `internal/team/config.go:180` | Error message missing `openai_compatible` | Added to error message |
+| 3 | `agent_engine/server.py:119` | Error listed only 4 providers instead of 9 | Updated to all 9 |
+| 4 | `scripts/install.sh:150-158` | `OPENAI_COMPATIBLE_API_KEY` missing from next steps | Added env var + base URL note |
+| 5 | `internal/bus/schema.go` | Binary requires CGO (`go-sqlite3`), fails without GCC | Migrated to `modernc.org/sqlite` |
+| 6 | `internal/cli/renderer.go` | Streaming chunks printed per-chunk; empty responses show stray `│` | Buffered flushes on newlines |
+| 7 | `cmd/2m/main.go` | Engine startup blocks help/version/bare invocation | Added `needsEngine()` skip |
+
+### Features Added
+| Feature | Details |
+|---------|---------|
+| **`base_url` in team YAML** | `Agent.BaseURL` overrides `OPENAI_COMPATIBLE_BASE_URL` env var; per-agent endpoint config |
+| **`**kwargs` on all providers** | Future provider-specific configs pass through without breaking others |
+| **`2mcode` Windows launcher** | `bin/2mcode.cmd` on PATH — `2mcode` works from any terminal |
+| **Instant CLI** | Engine deferred for help/version/config wizards |
+| **Pure-Go SQLite** | `modernc.org/sqlite` — no GOP/CC needed |
+| **ASCII logo centered** | All 8 `.md` files — `<div align="center">` wrapper |
+| **Test team `test-openrouter`** | `config/teams/test-openrouter.yaml` using OpenRouter free models |
+| **Verified working** | OpenRouter key valid, MiniMax model responded, memory system functional |

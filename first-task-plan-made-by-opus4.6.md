@@ -1,3 +1,16 @@
+<div align="center">
+
+```
+██████╗ ███╗   ███╗     ██████╗ ██████╗ ██████╗ ███████╗
+╚════██╗████╗ ████║    ██╔════╝██╔═══██╗██╔══██╗██╔════╝
+ █████╔╝██╔████╔██║    ██║     ██║   ██║██║  ██║█████╗  
+██╔═══╝ ██║╚██╔╝██║    ██║     ██║   ██║██║  ██║██╔══╝  
+███████╗██║ ╚═╝ ██║    ╚██████╗╚██████╔╝██████╔╝███████╗
+╚══════╝╚═╝     ╚═╝     ╚═════╝ ╚═════╝ ╚═════╝ ╚══════╝
+```
+
+</div>
+
 # 2M Code — Full Foundation Build
 
 Build the **entire** project foundation so that any AI (including less powerful models) can pick up where this leaves off. Every file described in `agent.md` will be created with production-quality code, proper error handling, and comprehensive doc comments.

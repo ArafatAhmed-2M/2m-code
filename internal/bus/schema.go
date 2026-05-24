@@ -12,7 +12,7 @@ import (
 	"os"
 	"path/filepath"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "modernc.org/sqlite"
 )
 
 // sessionsSchema defines the SQL for the sessions table.
@@ -53,7 +53,7 @@ func InitDB(dbPath string) (*sql.DB, error) {
 		return nil, fmt.Errorf("cannot create database directory %s: %w — check write permissions", dir, err)
 	}
 
-	db, err := sql.Open("sqlite3", dbPath)
+	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
 		return nil, fmt.Errorf("cannot open database at %s: %w — ensure SQLite is supported on this platform", dbPath, err)
 	}

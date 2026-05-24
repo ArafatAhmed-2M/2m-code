@@ -35,7 +35,9 @@ var colorMap = map[string]lipgloss.Color{
 
 // TerminalRenderer implements the orchestrator.Renderer interface for terminal output.
 type TerminalRenderer struct {
-	width int // Terminal width for formatting
+	width     int    // Terminal width for formatting
+	textBuf   string // Buffer for streaming text (incomplete line)
+	agentLine bool   // Whether we're in the middle of an agent's text output
 }
 
 // NewRenderer creates a new TerminalRenderer.
@@ -57,6 +59,10 @@ func getColor(agent team.Agent) lipgloss.Color {
 //
 //	╭─ Aria · Tech Lead ────────────────────────
 func (r *TerminalRenderer) PrintAgentStart(agent team.Agent) {
+	// Clear any leftover text from previous agent
+	r.textBuf = ""
+	r.agentLine = false
+
 	color := getColor(agent)
 
 	// Build the agent badge
@@ -85,7 +91,7 @@ func (r *TerminalRenderer) PrintAgentStart(agent team.Agent) {
 	fmt.Printf("\n%s%s%s\n", topBorder, styledBadge, topPadding)
 }
 
-// PrintAgentText renders the agent's text response with bordered lines.
+// PrintAgentText buffers streaming text and renders complete lines.
 //
 //	│ I'll break this task into three subtasks...
 func (r *TerminalRenderer) PrintAgentText(agent team.Agent, text string) {
@@ -94,17 +100,45 @@ func (r *TerminalRenderer) PrintAgentText(agent team.Agent, text string) {
 		Foreground(color).
 		Render("│")
 
-	// Split text into lines and render each with a border
-	lines := strings.Split(text, "\n")
-	for _, line := range lines {
+	r.textBuf += text
+	r.agentLine = true
+
+	// Render complete lines (split by newline)
+	for {
+		idx := strings.IndexByte(r.textBuf, '\n')
+		if idx < 0 {
+			break
+		}
+		line := r.textBuf[:idx]
 		fmt.Printf("%s %s\n", border, line)
+		r.textBuf = r.textBuf[idx+1:]
 	}
+}
+
+// FlushAgentText prints any remaining buffered text.
+func (r *TerminalRenderer) FlushAgentText(agent team.Agent) {
+	content := strings.TrimSpace(r.textBuf)
+	if content == "" {
+		r.textBuf = ""
+		return
+	}
+	color := getColor(agent)
+	border := lipgloss.NewStyle().
+		Foreground(color).
+		Render("│")
+
+	fmt.Printf("%s %s\n", border, content)
+	r.textBuf = ""
+	r.agentLine = false
 }
 
 // PrintAgentEnd renders the closing border for an agent's response.
 //
 //	╰──────────────────────────────────────────
 func (r *TerminalRenderer) PrintAgentEnd(agent team.Agent) {
+	// Flush any remaining buffered text first
+	r.FlushAgentText(agent)
+
 	color := getColor(agent)
 	bottom := lipgloss.NewStyle().
 		Foreground(color).
@@ -220,11 +254,12 @@ func (r *TerminalRenderer) PrintWelcome() {
 		Foreground(lipgloss.Color("8")).
 		Italic(true)
 
-	fmt.Println(titleStyle.Render("  ___  __  __    ____          _      "))
-	fmt.Println(titleStyle.Render(" |__ \\|  \\/  |  / ___|___   __| | ___ "))
-	fmt.Println(titleStyle.Render("   ) | |\\/| | | |   / _ \\ / _` |/ _ \\"))
-	fmt.Println(titleStyle.Render("  / /| |  | | | |__| (_) | (_| |  __/"))
-	fmt.Println(titleStyle.Render(" |___|_|  |_|  \\____\\___/ \\__,_|\\___|"))
+	fmt.Println(titleStyle.Render("██████╗ ███╗   ███╗     ██████╗ ██████╗ ██████╗ ███████╗"))
+	fmt.Println(titleStyle.Render("╚════██╗████╗ ████║    ██╔════╝██╔═══██╗██╔══██╗██╔════╝"))
+	fmt.Println(titleStyle.Render(" █████╔╝██╔████╔██║    ██║     ██║   ██║██║  ██║█████╗  "))
+	fmt.Println(titleStyle.Render("██╔═══╝ ██║╚██╔╝██║    ██║     ██║   ██║██║  ██║██╔══╝  "))
+	fmt.Println(titleStyle.Render("███████╗██║ ╚═╝ ██║    ╚██████╗╚██████╔╝██████╔╝███████╗"))
+	fmt.Println(titleStyle.Render("╚══════╝╚═╝     ╚═╝     ╚═════╝ ╚═════╝ ╚═════╝ ╚══════╝"))
 	fmt.Println(subtitleStyle.Render("  The AI coding platform that thinks in teams"))
 	fmt.Println()
 }

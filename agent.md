@@ -1,3 +1,16 @@
+<div align="center">
+
+```
+██████╗ ███╗   ███╗     ██████╗ ██████╗ ██████╗ ███████╗
+╚════██╗████╗ ████║    ██╔════╝██╔═══██╗██╔══██╗██╔════╝
+ █████╔╝██╔████╔██║    ██║     ██║   ██║██║  ██║█████╗  
+██╔═══╝ ██║╚██╔╝██║    ██║     ██║   ██║██║  ██║██╔══╝  
+███████╗██║ ╚═╝ ██║    ╚██████╗╚██████╔╝██████╔╝███████╗
+╚══════╝╚═╝     ╚═╝     ╚═════╝ ╚═════╝ ╚═════╝ ╚══════╝
+```
+
+</div>
+
 # agent.md — 2M Code V3
 **AI Agent Instruction File**  
 **Project:** 2M Code (Multi-Mind Coding Platform)  
@@ -32,7 +45,7 @@ You do not ask unnecessary questions. You read the specs, make sensible decision
 | CLI framework | `github.com/spf13/cobra` | Industry standard Go CLI |
 | Agent engine | Python 3.11+ / FastAPI | Best AI SDK ecosystem |
 | IPC | HTTP over localhost:8765 | Simple, reliable |
-| State / event bus | SQLite via `github.com/mattn/go-sqlite3` | Zero dependency, embedded |
+| State / event bus | SQLite via `modernc.org/sqlite` | Zero dependency, embedded, pure-Go (no CGO) |
 | Config | YAML via `gopkg.in/yaml.v3` | Human-readable team definitions |
 | Terminal rendering | `github.com/charmbracelet/lipgloss` | Beautiful CLI output |
 | LLM providers | `anthropic`, `openai`, `google-genai`, `mistralai`, `cohere`, `groq` Python SDKs + `httpx` for Ollama + generic `openai` SDK for OpenAI-compatible | Native SDKs for all supported providers + universal adapter |
@@ -93,10 +106,13 @@ You do not ask unnecessary questions. You read the specs, make sensible decision
 │   └── teams/
 │       ├── fullstack.yaml           ← Example: full-stack web team
 │       ├── data-science.yaml        ← Example: data science team
-│       └── code-review.yaml         ← Example: focused code review team
+│       ├── code-review.yaml         ← Example: focused code review team
+│       └── test-openrouter.yaml     ← Example: OpenRouter free models test team
 ├── scripts/
 │   └── install.sh                   ← Installation script
-├── bin/                             ← Build output (gitignored)
+├── bin/
+│   ├── 2m.exe                       ← Build output (gitignored)
+│   └── 2mcode.cmd                   ← Windows wrapper: `2mcode` runs `2m` from any terminal
 ├── go.mod
 ├── go.sum
 ├── requirements.txt
@@ -201,6 +217,7 @@ Structs updated for V2:
 - `Team.CustomTools []CustomTool` — user-defined tool definitions
 - `Workflow.MaxTokensPerRun int` — token budget enforcement
 - `Workflow.MaxTokens int` — max tokens per turn
+- `Agent.BaseURL string` — API base URL (openai_compatible only); overrides `OPENAI_COMPATIBLE_BASE_URL` env var
 
 ---
 
@@ -256,17 +273,18 @@ The project was V2-complete when:
 2. `2m new-team` launches an interactive wizard and creates a valid YAML
 3. `2m run fullstack "Build a hello world REST API in Go"` runs a full team session and writes output files
 4. `2m chat code-review` opens an interactive REPL
-5. All three example team YAMLs are included and valid
+5. All example team YAMLs are included and valid
 6. `README.md` is complete and accurate
 7. A developer with only `OPENROUTER_API_KEY` set can run any team
 8. Memory context persists across `2m run` sessions and `2m chat` turns
 9. All 9 providers work: anthropic, google, openai, openai_compatible, mistral, cohere, groq, ollama, openrouter
+10. `2mcode` command works from any terminal (via `bin/2mcode.cmd` wrapper + user PATH)
 
 ---
 
 ## Bugs Fixed (Session: 2026-05-24)
 
-The following bugs were found and fixed in one pass. All future agents should verify these are not reintroduced.
+The following bugs were found and fixed. All future agents should verify these are not reintroduced.
 
 | # | File | Bug | Fix |
 |---|------|-----|-----|
@@ -278,6 +296,19 @@ The following bugs were found and fixed in one pass. All future agents should ve
 | 6 | `internal/cli/run.go:77-78` | Fallback on team-not-found swaps team name and task (confusing error) | Changed `args[len-1]` → `args[0]`, `args[:len-1]` → `args[1:]` |
 | 7 | `agent_engine/providers/openrouter_provider.py:70` | `top_p` used as fallback for `context_length` (completely wrong attribute) | Changed to just `0` |
 | 8 | `internal/orchestrator/tools.go:50-108` | Custom tool `{param}` placeholders never substituted in command template | Added `strings.ReplaceAll` substitution loop before execution |
+| 9 | `internal/cli/renderer.go` | Streaming renderer printed every SSE chunk on a new line; empty responses produced stray `│` | `PrintAgentText` now buffers chunks and flushes on newlines |
+| 10 | `cmd/2m/main.go` | Engine startup blocks `--help`, `--version`, and bare `2mcode` invocation | Added `needsEngine()` check; only starts engine for `run`, `chat`, `history`, `models`, `plugin` |
+| 11 | `internal/bus/schema.go` | `go-sqlite3` requires CGO; Windows has no GCC | Migrated to `modernc.org/sqlite` (pure Go, no build tools) |
+
+### Features Added
+| # | Feature | Details |
+|---|---------|---------|
+| 1 | **OpenAI-Compatible provider** | Full provider adapter with streaming, tool calling, model listing |
+| 2 | **`base_url` in team YAML** | `Agent.BaseURL` overrides `OPENAI_COMPATIBLE_BASE_URL` env var; per-agent endpoint config |
+| 3 | **`2mcode` Windows launcher** | `bin/2mcode.cmd` — type `2mcode` from any terminal |
+| 4 | **Instant CLI** | No engine startup delay for help, version, new-team, team, config, completion |
+| 5 | **Streaming buffer** | Text chunks accumulated and flushed on newlines — smooth output |
+| 6 | **Pure-Go SQLite** | `modernc.org/sqlite` replaces `go-sqlite3` — no CGO needed |
 
 ## What's Still Needed (see context-for-ai.md for live state)
 
@@ -287,7 +318,7 @@ The canonical state of what's been done and what's next lives in `context-for-ai
 - **Tests:** No test files exist yet in either Go or Python.
 - **`2m history` command:** Only a stub exists (`team.go:173-186`).
 - **`web_fetch` tool:** Go-side `ExecuteTool` returns a stub string instead of actually fetching a URL.
-- **Streaming renderer:** `PrintAgentText` prints every SSE chunk on a new line; small chunks produce fragmented output.
+- **Streaming renderer:** ~~`PrintAgentText` prints every SSE chunk on a new line~~ ✅ FIXED — now buffers and flushes on newlines
 - **Chat token budget:** `RunTask` enforces `MaxTokensPerRun` but `RunChatTurn` does not.
 
 ### V3 Features (P0-P3 priority)

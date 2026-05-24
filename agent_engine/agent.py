@@ -196,6 +196,7 @@ async def run_agent(req) -> dict:
         messages=req_dict["messages"],
         tools=tools,
         max_tokens=req_dict["max_tokens"],
+        base_url=req.base_url,
     )
 
     logger.info(
@@ -271,6 +272,7 @@ async def run_agent_stream(req):
             messages=req_dict["messages"],
             tools=tools,
             max_tokens=req_dict["max_tokens"],
+            base_url=req.base_url,
         ):
             if event_type == "text":
                 content_parts.append(data.get("content", ""))
@@ -287,6 +289,7 @@ async def run_agent_stream(req):
             messages=req_dict["messages"],
             tools=tools,
             max_tokens=req_dict["max_tokens"],
+            base_url=req.base_url,
         )
         yield ("text", result.get("content", ""))
         for tc in result.get("tool_calls", []):

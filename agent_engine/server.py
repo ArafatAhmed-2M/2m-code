@@ -54,6 +54,7 @@ class AgentRequest(BaseModel):
     custom_tools: list[dict] = Field(default_factory=list, description="User-defined tool definitions (name, description, input_schema)")
     max_tokens: int = Field(default=4096, description="Max tokens for the response")
     stream: bool = Field(default=False, description="If true, stream response via SSE")
+    base_url: str = Field(default="", description="API base URL (openai_compatible only); overrides env var")
 
 
 class AgentResponse(BaseModel):
@@ -116,7 +117,7 @@ async def _call_non_streaming(req: AgentRequest) -> AgentResponse:
         logger.error("Unknown provider requested: %s", req.provider)
         raise HTTPException(
             status_code=400,
-            detail=f"Unknown provider: {req.provider}. Supported: anthropic, google, openai, mistral",
+            detail=f"Unknown provider: {req.provider}. Supported: anthropic, google, openai, openai_compatible, mistral, cohere, groq, ollama, openrouter",
         ) from e
     except ValueError as e:
         logger.error("Invalid request parameters: %s", str(e))

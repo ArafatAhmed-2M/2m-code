@@ -98,6 +98,7 @@ async def call_stream(
     messages: list[dict],
     tools: list[dict],
     max_tokens: int,
+    **kwargs,
 ):
     """Stream a response from OpenAI, yielding (type, data) tuples."""
     client = _get_client()
@@ -177,6 +178,7 @@ async def call(
     messages: list[dict],
     tools: list[dict],
     max_tokens: int,
+    **kwargs,
 ) -> dict:
     """
     Call the OpenAI API and return a normalized response.

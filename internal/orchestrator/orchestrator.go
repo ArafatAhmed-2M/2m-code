@@ -46,6 +46,9 @@ type Renderer interface {
 
 	// PrintInfo shows an informational message.
 	PrintInfo(msg string)
+
+	// FlushAgentText prints any remaining buffered streaming text.
+	FlushAgentText(agent team.Agent)
 }
 
 // Orchestrator coordinates agent turns for a team task.
@@ -219,6 +222,7 @@ func (o *Orchestrator) runAgentTurn(
 		Tools:       agent.Tools,
 		CustomTools: customToolDefs,
 		MaxTokens:   t.Workflow.MaxTokens,
+		BaseURL:     agent.BaseURL,
 	}
 
 	o.renderer.PrintAgentStart(agent)
@@ -231,6 +235,9 @@ func (o *Orchestrator) runAgentTurn(
 
 	inputTokens += resp.InputTokens
 	outputTokens += resp.OutputTokens
+
+	// Flush any remaining streaming text before tool calls
+	o.renderer.FlushAgentText(agent)
 
 	// 5. Handle tool use loop (max 5 iterations to prevent runaway)
 	maxToolIterations := 5

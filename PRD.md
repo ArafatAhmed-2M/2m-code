@@ -1,8 +1,20 @@
-# 2M Code V2 — Product Requirements Document
+<div align="center">
+
+```
+██████╗ ███╗   ███╗     ██████╗ ██████╗ ██████╗ ███████╗
+╚════██╗████╗ ████║    ██╔════╝██╔═══██╗██╔══██╗██╔════╝
+ █████╔╝██╔████╔██║    ██║     ██║   ██║██║  ██║█████╗  
+██╔═══╝ ██║╚██╔╝██║    ██║     ██║   ██║██║  ██║██╔══╝  
+███████╗██║ ╚═╝ ██║    ╚██████╗╚██████╔╝██████╔╝███████╗
+╚══════╝╚═╝     ╚═╝     ╚═════╝ ╚═════╝ ╚═════╝ ╚══════╝
+```
+
+</div>
+
+# 2M Code — Product Requirements Document
 **Version:** 2.0.0  
 **Status:** Active  
 **Codename:** Multi-Mind  
-**Platform:** Google Antigravity  
 
 ---
 
@@ -186,7 +198,7 @@ custom_tools:
 | Anthropic | `ANTHROPIC_API_KEY` | claude-opus-4-5, claude-sonnet-4-6, claude-haiku-4-5 |
 | Google | `GOOGLE_API_KEY` | gemini-1.5-pro, gemini-1.5-flash, gemini-2.0-flash |
 | OpenAI | `OPENAI_API_KEY` | gpt-4o, gpt-4o-mini, o1-preview |
-| OpenAI-Compatible | `OPENAI_COMPATIBLE_API_KEY` + `OPENAI_COMPATIBLE_BASE_URL` | DeepSeek, Together, xAI/Grok, Perplexity, Fireworks, GitHub Models, etc. |
+| OpenAI-Compatible | `OPENAI_COMPATIBLE_API_KEY` + `base_url` in YAML (or `OPENAI_COMPATIBLE_BASE_URL`) | DeepSeek, Together, xAI/Grok, Perplexity, Fireworks, GitHub Models, etc. |
 | Mistral | `MISTRAL_API_KEY` | mistral-large, codestral |
 | Cohere | `COHERE_API_KEY` | command-r-plus, command-r |
 | Groq | `GROQ_API_KEY` | llama3-70b-8192, mixtral-8x7b-32768 |

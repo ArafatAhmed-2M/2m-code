@@ -88,7 +88,7 @@ func runNewTeam(cmd *cobra.Command, args []string) error {
 		}
 
 		role := prompt(scanner, promptStyle.Render("  Role (e.g., Tech Lead): "))
-		provider := promptWithOptions(scanner, promptStyle.Render("  Provider"), []string{"anthropic", "google", "openai", "mistral", "cohere", "groq", "ollama", "openrouter"})
+		provider := promptWithOptions(scanner, promptStyle.Render("  Provider"), []string{"anthropic", "google", "openai", "openai_compatible", "mistral", "cohere", "groq", "ollama", "openrouter"})
 		model := prompt(scanner, promptStyle.Render("  Model (e.g., claude-opus-4-5): "))
 
 		// Default system prompt
@@ -102,6 +102,12 @@ func runNewTeam(cmd *cobra.Command, args []string) error {
 		systemPrompt := prompt(scanner, promptStyle.Render("  System prompt (press Enter for default): "))
 		if systemPrompt == "" {
 			systemPrompt = defaultPrompt
+		}
+
+		// Base URL (only for openai_compatible)
+		var baseURL string
+		if provider == "openai_compatible" {
+			baseURL = prompt(scanner, promptStyle.Render("  Base URL (e.g. https://api.deepseek.com; Enter for env var): "))
 		}
 
 		// Tools
@@ -128,6 +134,7 @@ func runNewTeam(cmd *cobra.Command, args []string) error {
 			MaxContext:   20,
 			Color:        colors[(agentNum-1)%len(colors)],
 			Tools:        tools,
+			BaseURL:      baseURL,
 		})
 
 		fmt.Printf("  ✓ Added %s (%s)\n\n", name, role)

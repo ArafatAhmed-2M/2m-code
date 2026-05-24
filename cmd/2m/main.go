@@ -30,79 +30,98 @@ import (
 	"github.com/2mcode/2mcode/internal/team"
 )
 
+// needsEngine returns true if the command requires the Python agent engine.
+func needsEngine() bool {
+	for _, arg := range os.Args[1:] {
+		if arg == "" || arg[0] == '-' {
+			continue // flags don't need the engine
+		}
+		switch arg {
+		case "help", "new-team", "team", "config", "completion":
+			return false
+		default:
+			return true
+		}
+	}
+	return false // no args or only flags = no engine needed (shows help)
+}
+
 func main() {
 	// Ensure config directory exists
 	if err := team.EnsureConfigDir(); err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: cannot create config directory: %s\n", err)
 	}
 
-	// Find the agent engine server.py
-	enginePath := findEngineScript()
-	if enginePath == "" {
-		fmt.Fprintf(os.Stderr, "Error: cannot find agent_engine/server.py\n")
-		fmt.Fprintf(os.Stderr, "Reinstall with: curl -sSL https://raw.githubusercontent.com/ArafatAhmed-2M/2M-Code/main/scripts/install.sh | bash\n")
-		fmt.Fprintf(os.Stderr, "Or set the 2M_ENGINE_PATH environment variable to point to server.py.\n")
-		os.Exit(1)
-	}
-
-	// Find Python interpreter
-	pythonPath := findPython()
-	if pythonPath == "" {
-		fmt.Fprintf(os.Stderr, "Error: Python 3 is required but not found.\n")
-		fmt.Fprintf(os.Stderr, "Install Python 3.11+ and ensure 'python3' or 'python' is in your PATH.\n")
-		os.Exit(1)
-	}
-
-	// Start the Python agent engine
-	// First, kill any stale agent engine on port 8765 to prevent port conflicts
-	killPort8765()
-
-	engineCmd := exec.Command(pythonPath, enginePath)
-	engineCmd.Stdout = os.Stderr // Engine logs go to stderr
-	engineCmd.Stderr = os.Stderr
-	engineCmd.Dir = filepath.Dir(enginePath)
-
-	// Set up environment
-	engineCmd.Env = append(os.Environ(), "PYTHONUNBUFFERED=1")
-
-	if err := engineCmd.Start(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: cannot start agent engine: %s\n", err)
-		fmt.Fprintf(os.Stderr, "Check that Python dependencies are installed: pip install -r requirements.txt\n")
-		os.Exit(1)
-	}
-
-	// Ensure the Python process is killed on exit
-	defer func() {
-		if engineCmd.Process != nil {
-			engineCmd.Process.Kill()
-			engineCmd.Wait()
+	// Start the engine only for commands that actually need it
+	if needsEngine() {
+		// Find the agent engine server.py
+		enginePath := findEngineScript()
+		if enginePath == "" {
+			fmt.Fprintf(os.Stderr, "Error: cannot find agent_engine/server.py\n")
+			fmt.Fprintf(os.Stderr, "Reinstall with: curl -sSL https://raw.githubusercontent.com/ArafatAhmed-2M/2M-Code/main/scripts/install.sh | bash\n")
+			fmt.Fprintf(os.Stderr, "Or set the 2M_ENGINE_PATH environment variable to point to server.py.\n")
+			os.Exit(1)
 		}
-	}()
 
-	// Handle OS signals to clean up the Python process
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-	go func() {
-		<-sigCh
-		if engineCmd.Process != nil {
-			engineCmd.Process.Kill()
+		// Find Python interpreter
+		pythonPath := findPython()
+		if pythonPath == "" {
+			fmt.Fprintf(os.Stderr, "Error: Python 3 is required but not found.\n")
+			fmt.Fprintf(os.Stderr, "Install Python 3.11+ and ensure 'python3' or 'python' is in your PATH.\n")
+			os.Exit(1)
 		}
-		os.Exit(0)
-	}()
 
-	// Wait for the agent engine to be ready
-	br := bridge.DefaultBridge()
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+		// Start the Python agent engine
+		// First, kill any stale agent engine on port 8765 to prevent port conflicts
+		killPort8765()
 
-	if err := br.WaitForReady(ctx); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: agent engine failed to start within 10 seconds.\n")
-		fmt.Fprintf(os.Stderr, "Check Python installation and requirements.txt.\n")
-		fmt.Fprintf(os.Stderr, "Detail: %s\n", err)
-		if engineCmd.Process != nil {
-			engineCmd.Process.Kill()
+		engineCmd := exec.Command(pythonPath, enginePath)
+		engineCmd.Stdout = os.Stderr // Engine logs go to stderr
+		engineCmd.Stderr = os.Stderr
+		engineCmd.Dir = filepath.Dir(enginePath)
+
+		// Set up environment
+		engineCmd.Env = append(os.Environ(), "PYTHONUNBUFFERED=1")
+
+		if err := engineCmd.Start(); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: cannot start agent engine: %s\n", err)
+			fmt.Fprintf(os.Stderr, "Check that Python dependencies are installed: pip install -r requirements.txt\n")
+			os.Exit(1)
 		}
-		os.Exit(1)
+
+		// Ensure the Python process is killed on exit
+		defer func() {
+			if engineCmd.Process != nil {
+				engineCmd.Process.Kill()
+				engineCmd.Wait()
+			}
+		}()
+
+		// Handle OS signals to clean up the Python process
+		sigCh := make(chan os.Signal, 1)
+		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+		go func() {
+			<-sigCh
+			if engineCmd.Process != nil {
+				engineCmd.Process.Kill()
+			}
+			os.Exit(0)
+		}()
+
+		// Wait for the agent engine to be ready
+		br := bridge.DefaultBridge()
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		if err := br.WaitForReady(ctx); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: agent engine failed to start within 10 seconds.\n")
+			fmt.Fprintf(os.Stderr, "Check Python installation and requirements.txt.\n")
+			fmt.Fprintf(os.Stderr, "Detail: %s\n", err)
+			if engineCmd.Process != nil {
+				engineCmd.Process.Kill()
+			}
+			os.Exit(1)
+		}
 	}
 
 	// Hand off to Cobra CLI
