@@ -86,6 +86,7 @@ func (o *Orchestrator) RunTask(ctx context.Context, t *team.Team, sessionID, tas
 	totalInputTokens := 0
 	totalOutputTokens := 0
 	turnCount := 0
+	perAgentTokens := make(map[string]struct{ Input, Output int })
 
 	// Create session
 	if err := o.eventBus.CreateSession(sessionID, t.Name); err != nil {
@@ -128,12 +129,16 @@ func (o *Orchestrator) RunTask(ctx context.Context, t *team.Team, sessionID, tas
 
 		totalInputTokens += input
 		totalOutputTokens += output
+		tokens := perAgentTokens[agentName]
+		tokens.Input += input
+		tokens.Output += output
+		perAgentTokens[agentName] = tokens
 		turnCount++
 	}
 
-	// Print completion summary with cost estimate
+	// Print completion summary with per-agent cost estimate
 	duration := time.Since(startTime)
-	costUSD := EstimateCost(t.Agents[0].Model, totalInputTokens, totalOutputTokens)
+	costUSD := TotalCost(t, perAgentTokens)
 	o.renderer.PrintSummary(turnCount, totalInputTokens, totalOutputTokens, costUSD, duration)
 
 	// Save memory for this session (best-effort)

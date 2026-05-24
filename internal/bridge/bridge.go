@@ -40,8 +40,8 @@ type AgentRequest struct {
 	Model       string            `json:"model"`        // Provider-specific model ID
 	System      string            `json:"system"`       // System prompt
 	Messages    []MessagePayload  `json:"messages"`     // Conversation history
-	Tools       []string          `json:"tools"`        // Enabled tool names
-	CustomTools []CustomToolDef   `json:"custom_tools"` // User-defined tool definitions (optional)
+	Tools       []string          `json:"tools,omitempty"`        // Enabled tool names
+	CustomTools []CustomToolDef   `json:"custom_tools,omitempty"` // User-defined tool definitions (optional)
 	MaxTokens   int               `json:"max_tokens"`   // Max response tokens
 	Stream      bool              `json:"stream"`       // Enable SSE streaming
 }

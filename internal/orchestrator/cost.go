@@ -77,10 +77,9 @@ func FormatCost(cost float64) string {
 // TotalCost computes estimated cost across all agents in a team.
 func TotalCost(t *team.Team, tokenUsage map[string]struct{ Input, Output int }) float64 {
 	total := 0.0
-	for i, agent := range t.Agents {
+	for _, agent := range t.Agents {
 		usage := tokenUsage[agent.Name]
 		total += EstimateCost(agent.Model, usage.Input, usage.Output)
-		_ = i
 	}
 	return total
 }

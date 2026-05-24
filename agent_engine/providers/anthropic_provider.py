@@ -23,7 +23,6 @@ def _get_client():
     if _client is not None:
         return _client
 
-    import anthropic
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
         raise ValueError(

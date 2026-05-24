@@ -225,7 +225,8 @@ func (t *Team) Validate() error {
 		allValidTools[k] = v
 	}
 	customToolNames := make(map[string]bool)
-	for _, ct := range t.CustomTools {
+	for i := range t.CustomTools {
+		ct := &t.CustomTools[i]
 		if ct.Name == "" {
 			return fmt.Errorf("custom_tool has empty name")
 		}

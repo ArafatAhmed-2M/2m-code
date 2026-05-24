@@ -67,7 +67,7 @@ def list_models() -> list[dict]:
                 "id": m.id,
                 "name": m.name or m.id,
                 "description": getattr(m, "description", ""),
-                "context_length": getattr(m, "context_length", getattr(m, "top_p", 0)), # some endpoints put context len in different places
+                "context_length": getattr(m, "context_length", 0),
             }
             for m in sorted(resp.data, key=lambda x: x.id)
         ]

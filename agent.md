@@ -225,3 +225,28 @@ The project is complete when:
 6. `README.md` is complete and accurate
 7. A developer with only `OPENROUTER_API_KEY` set can run any team
 8. Memory context persists across `2m run` sessions and `2m chat` turns
+
+---
+
+## Bugs Fixed (Session: 2026-05-24)
+
+The following bugs were found and fixed in one pass. All future agents should verify these are not reintroduced.
+
+| # | File | Bug | Fix |
+|---|------|-----|-----|
+| 1 | `agent_engine/providers/__init__.py:22` | `from providers import …` causes circular ImportError on startup | Changed to `from . import …` (relative import) |
+| 2 | `agent_engine/providers/anthropic_provider.py:26,34` | Duplicate `import anthropic` — first one unused | Removed the first import |
+| 3 | `internal/orchestrator/cost.go:80-84` | Unused loop var `i` with hacky `_ = i` suppression | Changed to `for _, agent := range` |
+| 4 | `internal/orchestrator/orchestrator.go:136` | Cost estimated using only `t.Agents[0].Model` for all agents' tokens (wrong when agents use different models) | Now tracks per-agent tokens and calls `TotalCost()` for accurate per-model aggregation |
+| 5 | `internal/team/team.go:242-244` | `ct.InputSchema` default set on range-copy (no effect on actual struct) | Changed to `for i := range` with pointer `&t.CustomTools[i]` |
+| 6 | `internal/cli/run.go:77-78` | Fallback on team-not-found swaps team name and task (confusing error) | Changed `args[len-1]` → `args[0]`, `args[:len-1]` → `args[1:]` |
+| 7 | `agent_engine/providers/openrouter_provider.py:70` | `top_p` used as fallback for `context_length` (completely wrong attribute) | Changed to just `0` |
+| 8 | `internal/orchestrator/tools.go:50-108` | Custom tool `{param}` placeholders never substituted in command template | Added `strings.ReplaceAll` substitution loop before execution |
+
+## What's Still Needed (for next agent)
+
+- **Tests:** No test files exist yet in either Go or Python. The project needs a test suite.
+- **`2m history` command:** Only a stub exists (`team.go:173-186`).
+- **`web_fetch` tool:** Go-side `ExecuteTool` returns a stub "handled by the agent engine" string instead of actually fetching a URL.
+- **Streaming renderer:** `PrintAgentText` prints every SSE chunk on a new line; small chunks produce fragmented output. Should buffer by newline.
+- **Chat token budget:** `RunTask` enforces `MaxTokensPerRun` but `RunChatTurn` does not.

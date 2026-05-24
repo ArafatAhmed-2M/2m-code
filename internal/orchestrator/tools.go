@@ -50,6 +50,10 @@ func ExecuteTool(name string, input map[string]interface{}, customTools []team.C
 // executeCustomTool finds a custom tool by name and runs its command via bash,
 // passing input parameters as environment variables (uppercased).
 func executeCustomTool(name string, input map[string]interface{}, customTools []team.CustomTool) string {
+	if name == "" {
+		return "Error: empty tool name"
+	}
+
 	var ct *team.CustomTool
 	for i := range customTools {
 		if customTools[i].Name == name {
@@ -59,6 +63,14 @@ func executeCustomTool(name string, input map[string]interface{}, customTools []
 	}
 	if ct == nil {
 		return fmt.Sprintf("Unknown tool: %s. Available: bash, read_file, write_file, web_fetch", name)
+	}
+
+	// Substitute {param} placeholders in the command template with input values
+	command := ct.Command
+	for k, v := range input {
+		placeholder := "{" + k + "}"
+		val := fmt.Sprintf("%v", v)
+		command = strings.ReplaceAll(command, placeholder, val)
 	}
 
 	// Build environment variables from input params (uppercased keys)
@@ -76,7 +88,7 @@ func executeCustomTool(name string, input map[string]interface{}, customTools []
 		shellFlag = "/C"
 	}
 
-	cmd := exec.Command(shell, shellFlag, ct.Command)
+	cmd := exec.Command(shell, shellFlag, command)
 	cmd.Dir, _ = os.Getwd()
 	cmd.Env = env
 

@@ -73,9 +73,9 @@ func runTask(cmd *cobra.Command, args []string) error {
 		}
 	}
 	if !found {
-		// Nothing matched — treat the last token as the team name.
-		teamName = args[len(args)-1]
-		task = strings.Join(args[:len(args)-1], " ")
+		// Nothing matched — treat the first token as the team name.
+		teamName = args[0]
+		task = strings.Join(args[1:], " ")
 	}
 	renderer := NewRenderer()
 

@@ -19,7 +19,7 @@ Supported providers:
   openrouter — 200+ models via OpenRouter (anthropic/claude-3.5-sonnet, etc.)
 """
 
-from providers import (
+from . import (
     anthropic_provider,
     google_provider,
     openai_provider,
