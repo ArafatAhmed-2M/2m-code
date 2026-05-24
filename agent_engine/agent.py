@@ -12,6 +12,7 @@ for its live model catalog and returns a unified list.
 import asyncio
 import logging
 import os
+from typing import Callable
 
 from providers import (
     anthropic_provider,
@@ -25,8 +26,58 @@ from providers import (
     openrouter_provider,
 )
 from tools import get_tool_definitions
+from plugin_loader import discover_plugins
+from plugin_base import Plugin
 
 logger = logging.getLogger("2mcode.agent")
+
+# Global plugin registry — populated once at startup
+_plugins: list[Plugin] = []
+
+
+def init_plugins(server_app=None):
+    """Discover and initialize all plugins.
+
+    Called once at engine startup. Runs each plugin's on_startup hook.
+    """
+    global _plugins
+    _plugins = discover_plugins()
+    logger.info("Discovered %d plugin(s)", len(_plugins))
+    for p in _plugins:
+        try:
+            p.on_startup(server_app)
+        except Exception as e:
+            logger.error("Plugin %s on_startup failed: %s", p.name, e)
+
+
+def shutdown_plugins():
+    """Run each plugin's on_shutdown hook."""
+    for p in _plugins:
+        try:
+            p.on_shutdown()
+        except Exception as e:
+            logger.error("Plugin %s on_shutdown failed: %s", p.name, e)
+
+
+def _run_plugin_turn_start_hooks(req: dict) -> dict:
+    """Run all on_agent_turn_start hooks, chaining the request through each."""
+    for p in _plugins:
+        try:
+            req = p.on_agent_turn_start(req)
+        except Exception as e:
+            logger.error("Plugin %s on_agent_turn_start failed: %s", p.name, e)
+    return req
+
+
+def _run_plugin_turn_end_hooks(response: dict) -> dict:
+    """Run all on_agent_turn_end hooks, chaining the response through each."""
+    for p in _plugins:
+        try:
+            response = p.on_agent_turn_end(response)
+        except Exception as e:
+            logger.error("Plugin %s on_agent_turn_end failed: %s", p.name, e)
+    return response
+
 
 # Provider registry — maps provider name to its module
 PROVIDERS = {
@@ -126,12 +177,25 @@ async def run_agent(req) -> dict:
         len(messages),
     )
 
+    # Run plugin on_agent_turn_start hooks
+    req_dict = {
+        "provider": req.provider,
+        "model": req.model,
+        "system": req.system,
+        "messages": messages,
+        "tools": req.tools,
+        "custom_tools": req.custom_tools,
+        "max_tokens": req.max_tokens,
+        "stream": False,
+    }
+    req_dict = _run_plugin_turn_start_hooks(req_dict)
+
     result = await provider.call(
-        model=req.model,
-        system=req.system,
-        messages=messages,
+        model=req_dict["model"],
+        system=req_dict["system"],
+        messages=req_dict["messages"],
         tools=tools,
-        max_tokens=req.max_tokens,
+        max_tokens=req_dict["max_tokens"],
     )
 
     logger.info(
@@ -141,6 +205,9 @@ async def run_agent(req) -> dict:
         result.get("output_tokens", 0),
         len(result.get("tool_calls", [])),
     )
+
+    # Run plugin on_agent_turn_end hooks
+    result = _run_plugin_turn_end_hooks(result)
 
     return result
 
@@ -181,31 +248,54 @@ async def run_agent_stream(req):
         actual_provider, req.model, req.tools, len(messages),
     )
 
+    # Run plugin on_agent_turn_start hooks
+    req_dict = {
+        "provider": req.provider,
+        "model": req.model,
+        "system": req.system,
+        "messages": messages,
+        "tools": req.tools,
+        "custom_tools": req.custom_tools,
+        "max_tokens": req.max_tokens,
+        "stream": True,
+    }
+    req_dict = _run_plugin_turn_start_hooks(req_dict)
+
     if has_streaming and call_stream_fn:
+        content_parts = []
+        tool_calls = []
+        last_done = None
         async for event_type, data in call_stream_fn(
-            model=req.model,
-            system=req.system,
-            messages=messages,
+            model=req_dict["model"],
+            system=req_dict["system"],
+            messages=req_dict["messages"],
             tools=tools,
-            max_tokens=req.max_tokens,
+            max_tokens=req_dict["max_tokens"],
         ):
+            if event_type == "text":
+                content_parts.append(data.get("content", ""))
+            elif event_type == "tool_call":
+                tool_calls.append(data)
+            elif event_type == "done":
+                last_done = data
             yield (event_type, data)
     else:
         # Fallback: non-streaming, yield entire response as one chunk
         result = await provider.call(
-            model=req.model,
-            system=req.system,
-            messages=messages,
+            model=req_dict["model"],
+            system=req_dict["system"],
+            messages=req_dict["messages"],
             tools=tools,
-            max_tokens=req.max_tokens,
+            max_tokens=req_dict["max_tokens"],
         )
         yield ("text", result.get("content", ""))
         for tc in result.get("tool_calls", []):
             yield ("tool_call", tc)
-        yield ("done", {
+        last_done = {
             "input_tokens": result.get("input_tokens", 0),
             "output_tokens": result.get("output_tokens", 0),
-        })
+        }
+        yield ("done", last_done)
 
 
 async def list_all_models(providers_filter: list[str] | None = None) -> dict:

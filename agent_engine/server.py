@@ -15,7 +15,8 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from agent import run_agent, run_agent_stream, list_all_models
+from agent import run_agent, run_agent_stream, list_all_models, init_plugins, shutdown_plugins
+from plugin_base import Plugin
 
 # Configure logging — never log credentials or secrets
 logging.basicConfig(
@@ -29,6 +30,8 @@ app = FastAPI(
     title="2M Code Agent Engine",
     description="Internal agent engine for the 2M Code CLI",
     version="1.0.0",
+    on_startup=[lambda: init_plugins(server_app=app)],
+    on_shutdown=[shutdown_plugins],
 )
 
 
@@ -159,6 +162,25 @@ async def _call_streaming(req: AgentRequest):
             "X-Accel-Buffering": "no",
         },
     )
+
+
+@app.get("/plugins")
+async def get_plugins():
+    """List all loaded plugins with their name and available hooks."""
+    from agent import _plugins
+    return {
+        "plugins": [
+            {
+                "name": p.name,
+                "hooks": [
+                    hook
+                    for hook in ["on_startup", "on_shutdown", "on_agent_turn_start", "on_agent_turn_end", "on_tool_exec"]
+                    if getattr(type(p), hook) is not getattr(Plugin, hook)
+                ],
+            }
+            for p in _plugins
+        ]
+    }
 
 
 # TODO(security): In production deployment, consider adding rate limiting

@@ -250,12 +250,26 @@ Teams can be stored in:
 - ✅ Persistent memory across sessions (LLM-summarized context saved to `~/.2mcode/memory/`)
 - ✅ Agent parallelism (simultaneous turns — planned)
 
-### v3 (Future)
-- 🔲 Web dashboard for team monitoring
-- 🔲 Plugin/extension system
-- 🔲 Agent self-improvement via feedback loops
-- 🔲 Integration with GitHub PRs and CI/CD
-- 🔲 Voice interface
+### v3 (Current) — Extensibility & Integration
+- ✅ Plugin/extension system (Python-based plugins with lifecycle hooks) — `2m plugin list`
+- 🔲 GitHub PR and CI/CD integration (auto-review PRs, run on push)
+- 🔲 Agent self-improvement via feedback loops (agents review each other)
+- 🔲 Web dashboard for team monitoring (read-only session viewer)
+- 🔲 Finish v2 gaps: tests, `2m history`, `web_fetch` tool, streaming renderer
+
+### v4 (Future) — Enterprise & Collaboration
+- 🔲 Multi-user session sharing (team members see the same team channel)
+- 🔲 Team management UI (invite, roles, access control)
+- 🔲 Audit logging (every agent action logged with timestamp + user)
+- 🔲 Persistent agent personas (agents remember their own history across projects)
+- 🔲 Usage analytics and cost dashboards
+
+### v5 (Future) — Autonomous & Intelligent
+- 🔲 Autonomous agent mode (agents proactively suggest and start work)
+- 🔲 Cross-project memory (agents transfer learning between projects)
+- 🔲 Natural language workflow builder (describe your team in plain English)
+- 🔲 Self-hosted model fine-tuning integration
+- 🔲 Real-time collaboration (multiple users chatting with the same team)
 
 ---
 

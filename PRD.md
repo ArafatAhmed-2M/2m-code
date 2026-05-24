@@ -314,6 +314,33 @@ Communication between Go (orchestrator) and Python (agent engine) is over a loca
 | M9 — Memory | Persistent session memory with LLM summarization | Complete |
 | M10 — Parallelism | Simultaneous agent turns | In progress |
 
+### v3 — Extensibility & Integration
+| Milestone | Scope | Target |
+|---|---|---|
+| M11 — Plugin System | Python-based plugin system with lifecycle hooks for custom tools, agent behaviors, and CLI commands | Complete |
+| M12 — GitHub Integration | Auto-review PRs, run on push via webhooks, comment with review results | Planned |
+| M13 — Feedback Loops | Agents review each other's work, structured feedback injected into future turns | Planned |
+| M14 — Web Dashboard | Read-only web UI for monitoring sessions, viewing logs, cost tracking | Planned |
+| M15 — V2 Gap Closure | Tests, `2m history` command, `web_fetch` tool fix, streaming renderer fix, chat budget enforcement | Planned |
+
+### v4 — Enterprise & Collaboration
+| Milestone | Scope |
+|---|---|
+| M16 — Multi-User | Team members share the same team channel, see each other's messages |
+| M17 — Team Management | Invite users, roles, access control for teams |
+| M18 — Audit Logs | Every agent action logged with timestamp and user identity |
+| M19 — Agent Personas | Agents persist their history and learn user preferences across projects |
+| M20 — Analytics | Usage dashboards, cost breakdowns, model performance metrics |
+
+### v5 — Autonomous & Intelligent
+| Milestone | Scope |
+|---|---|
+| M21 — Autonomous Mode | Agents proactively suggest tasks, start work without explicit prompts |
+| M22 — Cross-Project Memory | Agents transfer learning and context between different projects |
+| M23 — NL Workflow Builder | Describe team structure in plain English, auto-generate YAML |
+| M24 — Self-Hosted Models | Deep integration with local model serving (vLLM, TGI, Ollama advanced) |
+| M25 — Real-Time Collab | Multiple users simultaneously interacting with the same agent team |
+
 ---
 
 ## 12. Success Metrics (v1)

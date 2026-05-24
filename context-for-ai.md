@@ -4,9 +4,19 @@
 
 ---
 
-## Session Summary
+## Session 2 Summary (V3 Begins)
 
-This session fixed **8 bugs** and added **1 new provider** (`openai_compatible`). All changes are committed and pushed to GitHub (`main`).
+This session **started V3** by building the **plugin/extension system (P0)**:
+- `agent_engine/plugin_base.py` — Plugin base class with lifecycle hooks
+- `agent_engine/plugin_loader.py` — Scans `~/.2mcode/plugins/` and `.2mcode/plugins/` for .py files
+- `agent.py` — Added `init_plugins()`, `shutdown_plugins()`, hook integration in `run_agent()` and `run_agent_stream()`
+- `server.py` — Startup/shutdown event hooks, `/plugins` endpoint
+- `internal/cli/plugin.go` — `2m plugin list` CLI command
+- `internal/bridge/bridge.go` — Added `StylePath()` helper
+- `.2mcode/plugins/turn_logger.py` — Example plugin that logs turns to a file
+- `.2mcode/plugins/context_injector.py` — Example plugin that injects coding guidelines
+
+Previous work (Session 1): 8 bugs fixed, openai_compatible provider added, all docs updated.
 
 ---
 
@@ -17,74 +27,80 @@ This session fixed **8 bugs** and added **1 new provider** (`openai_compatible`)
 | Go build (`go build ./cmd/2m`) | ✅ Passes |
 | Go vet (`go vet ./...`) | ✅ Passes |
 | Python syntax (all .py files) | ✅ Passes |
-| Last commit | `a977424` — "Update all docs with 9-provider list, bug tracker, and issue log" |
-| All commits pushed | ✅ Yes |
+| Last commit | `1c88de5` — placeholder (will be replaced) |
 | Branch | `main` |
 
 ---
 
-## What Was Done This Session
+## V3 Feature Progress
 
-### Bugs Fixed (commit `e72b8c2`)
-
-| # | What | Where |
-|---|------|-------|
-| 1 | Fixed circular import in `providers/__init__.py` — `from providers` → `from .` | `agent_engine/providers/__init__.py` |
-| 2 | Removed duplicate `import anthropic` | `agent_engine/providers/anthropic_provider.py` |
-| 3 | Cleaned up unused loop var `_ = i` hack | `internal/orchestrator/cost.go` |
-| 4 | Fixed cost estimate — was using 1st agent's model for all tokens; now per-agent | `internal/orchestrator/orchestrator.go`, `cost.go` |
-| 5 | CustomTool InputSchema default was applied to range-copy, not actual struct | `internal/team/team.go:242-244` |
-| 6 | Team/task name swap on not-found fallback in `2m run` | `internal/cli/run.go:77-78` |
-| 7 | `top_p` (sampling param, value 0-1) used as `context_length` fallback | `agent_engine/providers/openrouter_provider.py:70` |
-| 8 | Custom tool `{param}` placeholders never substituted in command template | `internal/orchestrator/tools.go:50-108` |
-
-### Provider Added (commit `f0f3a1c`)
-
-- **`openai_compatible`** — generic adapter for any OpenAI-compatible API endpoint
-- Env vars: `OPENAI_COMPATIBLE_API_KEY`, `OPENAI_COMPATIBLE_BASE_URL` (default: `https://api.openai.com/v1`)
-- Supports: DeepSeek, Together AI, xAI Grok, Perplexity, Fireworks, GitHub Models, etc.
-- File: `agent_engine/providers/openai_compatible_provider.py`
-- Registered in: `agent.py` (PROVIDERS + _PROVIDER_ENV_VARS), `team.go` (validProviders), `config.go` (env var map)
-
-### Docs Updated (commit `a977424`)
-
-- `PRD.md` — provider lists, architecture diagram, goals
-- `README.md` — description, API keys, requirements, roadmap
-- `SETUP.md` — API key examples
-- `agent.md` — V2 description, Definition of Done, repo structure
-- `issue.md` — all 8 bugs + provider addition logged
+| Priority | Feature | Status |
+|----------|---------|--------|
+| P0 | Plugin/extension system | ✅ Complete |
+| P1 | GitHub PR & CI/CD integration | 🔲 Not started |
+| P2 | Agent self-improvement loops | 🔲 Not started |
+| P3 | Web dashboard (read-only) | 🔲 Not started |
+| P4 | V2 gap closure (tests, history, web_fetch, streaming, chat budget) | 🔲 Not started |
 
 ---
 
-## All 9 Providers
+## Plugin System Architecture
 
-| Provider name (in YAML) | Env var | Notes |
-|-------------------------|---------|-------|
-| `anthropic` | `ANTHROPIC_API_KEY` | Claude models |
-| `google` | `GOOGLE_API_KEY` | Gemini models |
-| `openai` | `OPENAI_API_KEY` | GPT models |
-| `openai_compatible` | `OPENAI_COMPATIBLE_API_KEY` + `OPENAI_COMPATIBLE_BASE_URL` | DeepSeek, Together, xAI, Perplexity, etc. |
-| `mistral` | `MISTRAL_API_KEY` | Mistral models |
-| `cohere` | `COHERE_API_KEY` | Command models |
-| `groq` | `GROQ_API_KEY` | Fast LPU inference |
-| `ollama` | (none) | Local models |
-| `openrouter` | `OPENROUTER_API_KEY` | 200+ models via unified API |
+### User-facing
+1. Place a `.py` file in `~/.2mcode/plugins/` (global) or `.2mcode/plugins/` (project)
+2. Subclass `Plugin` from `plugin_base.Plugin`
+3. Override any hooks: `on_startup`, `on_shutdown`, `on_agent_turn_start`, `on_agent_turn_end`, `on_tool_exec`
+4. Run `2m plugin list` to verify it loaded
 
----
+### Implementation
+- `plugin_loader.discover_plugins()` iterates directories, imports each `.py` file, finds `Plugin` subclasses, instantiates them
+- `agent.init_plugins(server_app)` called on server startup via FastAPI `on_startup`
+- `agent.shutdown_plugins()` called on server shutdown via FastAPI `on_shutdown`
+- `_run_plugin_turn_start_hooks(req)` chains request through each plugin's `on_agent_turn_start`
+- `_run_plugin_turn_end_hooks(response)` chains response through each plugin's `on_agent_turn_end`
+- `server.py` GET `/plugins` endpoint returns loaded plugins with their hook list
+- Go `2m plugin list` scans both dirs for `.py` files + queries `/plugins` for loaded plugin info
 
-## What's Still Needed (Unfinished V2 work)
-
-These are the items documented in `agent.md` under "What's Still Needed":
-
-1. **Tests** — No test files exist in Go or Python. The project needs a test suite.
-2. **`2m history` command** — Only a stub exists in `internal/cli/team.go:173-186`. Needs to load the latest session DB and print messages with agent badges.
-3. **`web_fetch` tool** — Go-side `ExecuteTool` returns a stub string "web_fetch is handled by the agent engine" instead of actually fetching a URL. Needs actual HTTP fetch logic or delegation to Python.
-4. **Streaming renderer** — `PrintAgentText` prints every SSE chunk on a new line; small chunks produce fragmented output. Should buffer by newline or use a character accumulator.
-5. **Chat token budget** — `RunTask` enforces `MaxTokensPerRun` but `RunChatTurn` does not.
+### Plugin directories checked (in order)
+1. `~/.2mcode/plugins/` — global, user-wide
+2. `$CWD/.2mcode/plugins/` — project-local (if CWD is project root)
+3. `$CWD/../.2mcode/plugins/` — project root (if CWD is agent_engine/)
+4. `$CWD/../../.2mcode/plugins/` — further up (fallback)
 
 ---
 
-## Architecture Quick Reference
+## V3/V4/V5 Roadmap (from PRD.md)
+
+### V3 — Extensibility & Integration
+| Milestone | Scope | Status |
+|-----------|-------|--------|
+| M11 — Plugin System | Python-based plugins with lifecycle hooks | ✅ Complete |
+| M12 — GitHub Integration | Auto-review PRs, run on push via webhooks | 🔲 |
+| M13 — Feedback Loops | Agents review each other's work | 🔲 |
+| M14 — Web Dashboard | Read-only web UI for monitoring | 🔲 |
+| M15 — V2 Gap Closure | Tests, history, web_fetch, streaming, budget | 🔲 |
+
+### V4 — Enterprise & Collaboration
+| Milestone | Scope |
+|-----------|-------|
+| M16 — Multi-User | Team members share the same team channel |
+| M17 — Team Management | Invite users, roles, access control for teams |
+| M18 — Audit Logs | Every agent action logged with timestamp and user |
+| M19 — Agent Personas | Agents persist history across projects |
+| M20 — Analytics | Dashboards, cost breakdowns, performance metrics |
+
+### V5 — Autonomous & Intelligent
+| Milestone | Scope |
+|-----------|-------|
+| M21 — Autonomous Mode | Agents proactively suggest tasks |
+| M22 — Cross-Project Memory | Agents transfer learning between projects |
+| M23 — NL Workflow Builder | Describe team in plain English, auto-generate YAML |
+| M24 — Self-Hosted Models | Deep integration with local model serving |
+| M25 — Real-Time Collab | Multiple users simultaneously interacting with same team |
+
+---
+
+## Current Architecture
 
 ### Go CLI (`cmd/2m/main.go`)
 - Starts Python agent engine subprocess, health-checks it, runs Cobra CLI, kills Python on exit
@@ -107,11 +123,15 @@ These are the items documented in `agent.md` under "What's Still Needed":
 - `POST /call` — non-streaming returns JSON, streaming returns SSE
 - `GET /health` — returns `{"status": "ok"}`
 - `GET /models` — returns `{provider: [model, ...]}`
+- `GET /plugins` — returns loaded plugins with hooks
+- Startup: runs `init_plugins()`, Shutdown: runs `shutdown_plugins()`
 
 ### Python Agent Router (`agent_engine/agent.py`)
 - `_resolve_provider()` — returns provider module, falls back to OpenRouter if provider's env var is missing but `OPENROUTER_API_KEY` is set
-- `run_agent()` — builds tool defs, calls provider's `call()`
-- `run_agent_stream()` — checks `has_streaming` and `call_stream_fn`, falls back to non-streaming
+- `init_plugins(server_app)` — discovers & initializes plugins, runs `on_startup`
+- `shutdown_plugins()` — runs each plugin's `on_shutdown`
+- `run_agent()` — runs plugin turn-start hooks → provider call → plugin turn-end hooks
+- `run_agent_stream()` — same hook chain with streaming support
 
 ### Team Loading (`internal/team/team.go`)
 - Search order: `./.2mcode/teams/` → `~/.2mcode/teams/` → `~/.2mcode/config/teams/` → relative to binary → `config/teams/` (relative to CWD)
@@ -124,57 +144,38 @@ These are the items documented in `agent.md` under "What's Still Needed":
 
 ---
 
-## Key File Locations
+## Key File Locations (V3 additions marked **NEW**)
 
 ```
 agent_engine/
-├── server.py                        ← FastAPI server
-├── agent.py                         ← Agent router
-├── providers/
-│   ├── __init__.py
-│   ├── anthropic_provider.py
-│   ├── google_provider.py
-│   ├── openai_provider.py
-│   ├── openai_compatible_provider.py  ← NEW (2026-05-24)
-│   ├── mistral_provider.py
-│   ├── cohere_provider.py
-│   ├── groq_provider.py
-│   ├── ollama_provider.py
-│   └── openrouter_provider.py
-├── tools/
-│   ├── __init__.py
-│   ├── bash_tool.py
-│   ├── file_tool.py
-│   └── web_tool.py
+├── server.py                        ← FastAPI server (+ plugins endpoint)
+├── agent.py                         ← Agent router (+ plugin hooks)
+├── plugin_base.py                    ← ** NEW ** Plugin base class
+├── plugin_loader.py                  ← ** NEW ** Plugin discovery/loading
+├── providers/...
+├── tools/...
 
-internal/
-├── bus/
-│   ├── bus.go
-│   └── schema.go
-├── bridge/
-│   └── bridge.go
-├── cli/
-│   ├── root.go
-│   ├── run.go
-│   ├── chat.go
-│   ├── team.go
-│   ├── newteam.go
-│   ├── models.go
-│   └── renderer.go
-├── memory/
-│   ├── store.go
-│   └── summarizer.go
-├── orchestrator/
-│   ├── orchestrator.go
-│   ├── scheduler.go
-│   ├── tools.go
-│   └── cost.go
-└── team/
-    ├── team.go
-    └── config.go
+internal/cli/
+├── plugin.go                         ← ** NEW ** `2m plugin list` command
 
-config/teams/
-├── fullstack.yaml
-├── code-review.yaml
-└── data-science.yaml
+.2mcode/plugins/
+├── turn_logger.py                    ← ** NEW ** Example plugin
+├── context_injector.py               ← ** NEW ** Example plugin
 ```
+
+---
+
+## What's Still Needed (for next agent)
+
+### V3 P1-P4 (see priority order in agent.md)
+1. **GitHub PR Integration** — `2m github review <pr-url>`, webhook server
+2. **Agent self-improvement loops** — agents review each other's work
+3. **Web dashboard** — read-only session monitoring (FastAPI + Jinja2 + HTMX)
+4. **V2 gap closure** — tests, `2m history`, `web_fetch` fix, streaming fix, chat budget
+
+### V2 gaps (still open)
+- **Tests** — No test files exist in Go or Python
+- **`2m history` command** — Stub only in `internal/cli/team.go:173-186`
+- **`web_fetch` tool** — Go-side returns stub string instead of fetching URL
+- **Streaming renderer** — `PrintAgentText` prints every SSE chunk on new line
+- **Chat token budget** — `RunTask` enforces `MaxTokensPerRun` but `RunChatTurn` does not

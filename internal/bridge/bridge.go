@@ -16,7 +16,14 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/charmbracelet/lipgloss"
 )
+
+// StylePath wraps a file path string with lipgloss styling for CLI output.
+func StylePath(path string) string {
+	return lipgloss.NewStyle().Foreground(lipgloss.Color("#00AAFF")).Render(path)
+}
 
 // CustomToolDef is the JSON representation of a custom tool sent to the agent engine.
 type CustomToolDef struct {

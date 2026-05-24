@@ -1,7 +1,7 @@
-# agent.md — 2M Code V2
-**AI Agent Instruction File for Google Antigravity**  
+# agent.md — 2M Code V3
+**AI Agent Instruction File**  
 **Project:** 2M Code (Multi-Mind Coding Platform)  
-**Version:** 2.0.0  
+**Version:** 3.0.0  
 **Repository:** https://github.com/ArafatAhmed-2M/2M-Code.git  
 
 ---
@@ -18,7 +18,9 @@ You do not ask unnecessary questions. You read the specs, make sensible decision
 
 2M Code is a CLI tool (like Claude Code or Gemini CLI) with one killer differentiator: **agent teams**. Instead of one AI model, users configure a *team* of AI agents — each with a name, role, provider, model, and system prompt — that collaborate on coding tasks through a shared conversation channel.
 
-**V2 adds** persistent memory (agents save context after every prompt), streaming token output, cost tracking with budgets, custom tool definitions, automatic OpenRouter fallback when provider-specific API keys are missing, and a generic OpenAI-Compatible provider adapter that works with DeepSeek, Together AI, xAI Grok, Perplexity, Fireworks, GitHub Models, and any other OpenAI-compatible API.
+**V2 added** persistent memory (agents save context after every prompt), streaming token output, cost tracking with budgets, custom tool definitions, automatic OpenRouter fallback, and a generic OpenAI-Compatible provider adapter.
+
+**V3 adds** a Python-based plugin/extension system (lifecycle hooks for custom tools, agent behaviors, and CLI commands), GitHub PR and CI/CD integration, agent self-improvement via feedback loops, a basic web dashboard for session monitoring, and closes remaining V2 gaps (tests, `2m history`, `web_fetch` tool fix, streaming renderer fix, chat budget enforcement).
 
 ---
 
@@ -202,22 +204,54 @@ Structs updated for V2:
 
 ---
 
-## What NOT to Build (V3+)
+## V3 Features — Implementation Order
 
-Do not build these — they are explicitly out of scope:
-- Web UI or dashboard
-- Plugin/extension system
-- Agent self-improvement via feedback loops
-- Integration with GitHub PRs and CI/CD
-- Voice interface
-- Fine-tuned or self-hosted models
-- Any telemetry or analytics
+These are listed in priority order. Build them in this sequence:
+
+| Priority | Feature | What It Does | Complexity |
+|----------|---------|--------------|------------|
+| P0 | Plugin/extension system | ✅ **Done.** Python-based plugins with lifecycle hooks: `on_agent_turn_start`, `on_agent_turn_end`, `on_tool_exec`, `on_startup`, `on_shutdown`. Scans `~/.2mcode/plugins/` and `.2mcode/plugins/`. Users write a single `.py` file that subclasses a base class. `2m plugin list` CLI command. | Medium |
+| P1 | GitHub PR & CI/CD integration | `2m github review <pr-url>` — fetches PR diff, runs the configured team, posts review as a comment. Optional webhook server to auto-review on push. | High |
+| P2 | Agent self-improvement loops | After each task, agent B reviews agent A's output, provides structured feedback. Feedback is injected into agent A's next turn. Agents improve across a session. | Medium |
+| P3 | Web dashboard (read-only) | Simple FastAPI-based web UI showing live sessions, agent messages, token usage, cost. Built with Jinja2 templates + HTMX — no JS framework. | High |
+| P4 | V2 gap closure | Tests, `2m history`, `web_fetch` tool fix, streaming renderer fix, chat budget enforcement. | Low |
+
+### What NOT to Build (V4+)
+
+Do not build these during V3:
+- Multi-user session sharing (V4)
+- Team management UI with roles (V4)
+- Audit logging (V4)
+- Agent personas (V4)
+- Autonomous agent mode (V5)
+- Cross-project memory (V5)
+- Natural language workflow builder (V5)
+- Self-hosted model fine-tuning (V5)
+- Real-time collaboration (V5)
+- Voice interface (deferred indefinitely)
+- Telemetry or analytics (deferred indefinitely)
 
 ---
 
 ## Definition of Done
 
-The project is complete when:
+### V3 Done
+
+The project is V3-complete when:
+1. All V2 Definition of Done items still pass
+2. Plugin system works: user creates `~/.2mcode/plugins/my_plugin.py` with a plugin class, and it hooks into agent turns / tool execution
+3. `2m github review <pr-url>` fetches a PR diff and runs a team review
+4. `2m history <session-id>` shows formatted session transcript
+5. `2m run` and `2m chat` enforce token budget consistently
+6. `web_fetch` tool actually fetches URLs (not stub)
+7. Streaming renderer outputs cleanly (no fragment-per-chunk)
+8. At least basic test files exist for Go and Python
+9. `context-for-ai.md` exists with current session state for AI resumability
+10. All docs (PRD.md, README.md, SETUP.md, agent.md, issue.md) are updated for V3
+
+### V2 Done (legacy — still applies)
+
+The project was V2-complete when:
 1. `go build ./cmd/2m` produces a working binary with no errors
 2. `2m new-team` launches an interactive wizard and creates a valid YAML
 3. `2m run fullstack "Build a hello world REST API in Go"` runs a full team session and writes output files
@@ -245,10 +279,16 @@ The following bugs were found and fixed in one pass. All future agents should ve
 | 7 | `agent_engine/providers/openrouter_provider.py:70` | `top_p` used as fallback for `context_length` (completely wrong attribute) | Changed to just `0` |
 | 8 | `internal/orchestrator/tools.go:50-108` | Custom tool `{param}` placeholders never substituted in command template | Added `strings.ReplaceAll` substitution loop before execution |
 
-## What's Still Needed (for next agent)
+## What's Still Needed (see context-for-ai.md for live state)
 
-- **Tests:** No test files exist yet in either Go or Python. The project needs a test suite.
+The canonical state of what's been done and what's next lives in `context-for-ai.md` at the repo root. It is regenerated each session so the next AI can pick up without losing context.
+
+### V2 Gaps (P4 priority for V3)
+- **Tests:** No test files exist yet in either Go or Python.
 - **`2m history` command:** Only a stub exists (`team.go:173-186`).
-- **`web_fetch` tool:** Go-side `ExecuteTool` returns a stub "handled by the agent engine" string instead of actually fetching a URL.
-- **Streaming renderer:** `PrintAgentText` prints every SSE chunk on a new line; small chunks produce fragmented output. Should buffer by newline.
+- **`web_fetch` tool:** Go-side `ExecuteTool` returns a stub string instead of actually fetching a URL.
+- **Streaming renderer:** `PrintAgentText` prints every SSE chunk on a new line; small chunks produce fragmented output.
 - **Chat token budget:** `RunTask` enforces `MaxTokensPerRun` but `RunChatTurn` does not.
+
+### V3 Features (P0-P3 priority)
+See the table in the V3 Features section above. Start with P0 (plugin system), then P1, P2, P3, then P4 (V2 gaps).
