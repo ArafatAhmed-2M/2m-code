@@ -271,3 +271,22 @@ agents:
 
 **Commit:** `(pending)`
 
+
+
+---
+
+## 21. `2m history` command was a stub — always printed "coming in next iteration"
+
+**File(s):** `internal/cli/team.go`
+
+**Problem:** The `2m history <team>` command was listed as a working command in README but its implementation only printed "(Session history display — coming in next iteration)". Users got no useful output.
+
+**Fix:** Implemented full `showHistory()`:
+- Finds the latest session database in `~/.2mcode/sessions/<team>/`
+- Opens the SQLite DB and reads all messages via `bus.GetAllMessages()`
+- Displays user messages with "You:" label and agent messages with color-coded badges
+- Shows timestamps, content, and tool calls per message
+- Loads team config to use each agent's assigned color and role for rendering
+- Shows helpful guidance when no sessions exist yet
+
+**Status:** ✅ Fixed

@@ -9,11 +9,15 @@ package cli
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
 
+	"github.com/2mcode/2mcode/internal/bus"
 	"github.com/2mcode/2mcode/internal/team"
 )
 
@@ -176,11 +180,131 @@ func showHistory(cmd *cobra.Command, args []string) error {
 	teamName := strings.Join(args, " ")
 	renderer := NewRenderer()
 
-	renderer.PrintInfo(fmt.Sprintf("History for team '%s':", teamName))
-	renderer.PrintInfo("(Session history display — coming in next iteration)")
+	// Load team to get agent roles/colors for rendering
+	t, err := team.LoadTeam(teamName)
+	if err != nil {
+		// Non-fatal — we can still show history without agent metadata
+		t = &team.Team{Name: teamName}
+	}
 
-	// TODO: Implement full history display by loading the latest session DB
-	// and printing all messages with agent badges
+	// Build agent lookup (name → agent)
+	agentLookup := make(map[string]team.Agent)
+	for _, a := range t.Agents {
+		agentLookup[a.Name] = a
+	}
+
+	// Get the sessions directory for this team
+	sessDir, err := team.SessionsPath(teamName)
+	if err != nil {
+		return fmt.Errorf("cannot determine sessions path: %w", err)
+	}
+
+	// Check if the sessions directory exists
+	if _, err := os.Stat(sessDir); os.IsNotExist(err) {
+		renderer.PrintInfo(fmt.Sprintf("No sessions found for team '%s'", teamName))
+		renderer.PrintInfo("Run a task first with: 2m run " + teamName + " \"<task>\"")
+		return nil
+	}
+
+	// Find the latest .db file by modification time
+	entries, err := os.ReadDir(sessDir)
+	if err != nil {
+		return fmt.Errorf("cannot read sessions directory %s: %w", sessDir, err)
+	}
+
+	var latestDB string
+	var latestTime time.Time
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".db") {
+			continue
+		}
+		info, err := e.Info()
+		if err != nil {
+			continue
+		}
+		if info.ModTime().After(latestTime) {
+			latestTime = info.ModTime()
+			latestDB = filepath.Join(sessDir, e.Name())
+		}
+	}
+
+	if latestDB == "" {
+		renderer.PrintInfo(fmt.Sprintf("No session databases found for team '%s'", teamName))
+		renderer.PrintInfo("Run a task first with: 2m run " + teamName + " \"<task>\"")
+		return nil
+	}
+
+	// Open the database
+	db, err := bus.InitDB(latestDB)
+	if err != nil {
+		return fmt.Errorf("cannot open session database: %w", err)
+	}
+	defer db.Close()
+
+	eventBus := bus.New(db)
+
+	// Get the latest session ID from the sessions table
+	sessionID, err := eventBus.GetLatestSessionID(teamName)
+	if err != nil {
+		return fmt.Errorf("cannot get latest session: %w", err)
+	}
+	if sessionID == "" {
+		renderer.PrintInfo(fmt.Sprintf("No sessions found for team '%s'", teamName))
+		return nil
+	}
+
+	// Get all messages
+	messages, err := eventBus.GetAllMessages(sessionID)
+	if err != nil {
+		return fmt.Errorf("cannot read messages: %w", err)
+	}
+
+	if len(messages) == 0 {
+		renderer.PrintInfo("Session is empty")
+		return nil
+	}
+
+	// Display session header
+	renderer.PrintInfo(fmt.Sprintf("History for team '%s': %d messages", teamName, len(messages)))
+	renderer.PrintInfo(fmt.Sprintf("Session: %s | %s", sessionID, latestTime.Format("Jan 2, 2006 15:04:05")))
+	fmt.Println()
+
+	// Display each message
+	for _, msg := range messages {
+		timeStr := msg.CreatedAt.Format("15:04:05")
+		if msg.Role == "user" {
+			renderer.PrintInfo(fmt.Sprintf("[%s] You:", timeStr))
+			fmt.Printf("  %s\n\n", msg.Content)
+		} else {
+			// Use agent's assigned color if available
+			a, known := agentLookup[msg.AgentName]
+			if known {
+				clr := colorMap["cyan"]
+				if c, ok := colorMap[a.Color]; ok {
+					clr = c
+				}
+				badge := lipgloss.NewStyle().
+					Background(clr).
+					Foreground(lipgloss.Color("0")).
+					Padding(0, 1).
+					Render(fmt.Sprintf(" %s · %s ", msg.AgentName, a.Role))
+				fmt.Printf("  %s  [%s]\n", badge, timeStr)
+			} else {
+				style := lipgloss.NewStyle().Foreground(lipgloss.Color("15")).Padding(0, 1)
+				fmt.Printf("  %s  [%s]\n", style.Render(msg.AgentName), timeStr)
+			}
+
+			// Print content line by line
+			for _, line := range strings.Split(msg.Content, "\n") {
+				fmt.Printf("  │ %s\n", line)
+			}
+
+			if msg.ToolCalls != "" {
+				fmt.Printf("  │ \x1b[90m[Tool calls: %s]\x1b[0m\n", msg.ToolCalls)
+			}
+			fmt.Println()
+		}
+	}
 
 	return nil
 }

@@ -197,6 +197,99 @@ Teams can be stored in:
 
 ---
 
+## Skills
+
+2M Code ships with **17 built-in skills** that inject expert instructions into agent prompts when you mention a task they cover. Skills are auto-detected — just describe what you need, and matching skill content is appended to the agent's system prompt.
+
+### How it works
+
+1. You ask the agent team to do something (e.g., "Create a PDF report with a table")
+2. The system checks your message against known skill names
+3. If a match is found (e.g., the `pdf` skill), its full instructions are injected into the system prompt
+4. The agent follows the skill's expert guidance for superior results
+
+### Available skills
+
+```
+2m skill list              List all skills
+2m skill show <name>       Show full skill content
+```
+
+| Skill | Description |
+|---|---|
+| `pdf` | Create, read, edit, merge, split, OCR, and fill PDF forms |
+| `pptx` | Build slide decks, pitch decks, and edit presentations |
+| `docx` | Create and manipulate Word documents with formatting |
+| `xlsx` | Create and edit spreadsheets, charts, and tabular data |
+| `frontend-design` | Build production-grade web interfaces with bold aesthetics |
+| `canvas-design` | Create posters, art, and visual designs with design philosophy |
+| `algorithmic-art` | Generative art with p5.js, flow fields, and particle systems |
+| `theme-factory` | Apply curated font and color themes to any artifact |
+| `doc-coauthoring` | Structured workflow for co-authoring documentation |
+| `brand-guidelines` | Apply brand colors, typography, and style guidelines |
+| `internal-comms` | Write status reports, newsletters, FAQs, and team updates |
+| `mcp-builder` | Create MCP servers (Python FastMCP or Node/TypeScript) |
+| `claude-api` | Build and optimize Claude API / Anthropic SDK apps |
+| `web-artifacts-builder` | Create multi-component HTML artifacts with React + Tailwind |
+| `webapp-testing` | Test local web apps with Playwright |
+| `slack-gif-creator` | Create animated GIFs optimized for Slack |
+| `skill-creator` | Create, edit, and benchmark new skills |
+
+Skills live in the `Skills/` directory. Each skill is a folder with a `SKILL.md` file containing YAML frontmatter (name, description, license) and Markdown body with expert instructions.
+
+---
+
+## Plugins
+
+2M Code has a Python-based plugin system that lets you hook into the agent engine lifecycle. Plugins can modify agent prompts, intercept tool execution, log activity, and more.
+
+### How it works
+
+1. Create a `.py` file in `~/.2mcode/plugins/` (global) or `.2mcode/plugins/` (project-local)
+2. Subclass `Plugin` from `plugin_base.Plugin` and override lifecycle hooks
+3. Run `2m plugin list` to verify it loaded
+
+### Lifecycle hooks
+
+| Hook | When it runs | What you can do |
+|---|---|---|
+| `on_startup(server_app)` | Engine starts | Register FastAPI routes, init connections |
+| `on_shutdown()` | Engine stops | Clean up resources |
+| `on_agent_turn_start(req)` | Before each agent call | Modify system prompt, inject context |
+| `on_agent_turn_end(response)` | After each agent response | Format output, log tokens, append footers |
+| `on_tool_exec(tool_name, params)` | Before tool execution | Block dangerous commands, log usage |
+
+### Example: context injector
+
+```python
+from plugin_base import Plugin
+
+class ContextInjectorPlugin(Plugin):
+    name = "context_injector"
+
+    def on_agent_turn_start(self, req: dict) -> dict:
+        req["system"] += "\n## Guidelines\n- Prefer simple, readable code"
+        return req
+```
+
+### Built-in example plugins
+
+```
+~/.2mcode/plugins/
+  context_injector.py   — Injects coding guidelines into every agent turn
+  turn_logger.py        — Logs agent turn start/end to a file
+  safety_filter.py      — Blocks dangerous tool calls (rm -rf /, etc.)
+  response_formatter.py — Appends token usage and timestamp to responses
+```
+
+### CLI
+
+```
+2m plugin list   — List all discovered plugins and their hooks
+```
+
+---
+
 ## Supported Providers
 
 | Provider | Available Models (Examples) | Required Env Var | Notes |
@@ -239,6 +332,10 @@ Teams can be stored in:
 2m chat <team>           Start an interactive REPL with a team
 2m history <team>        Show last session's team channel log
 2m config set <key>      Set global config values
+2m models [provider]     List available models from providers (filter optional)
+2m plugin list           List all discovered plugins and their hooks
+2m skill list            List all available skills
+2m skill show <name>     Show full content of a specific skill
 ```
 
 ---
@@ -263,10 +360,11 @@ Teams can be stored in:
 
 ### v3 (Current) — Extensibility & Integration
 - ✅ Plugin/extension system (Python-based plugins with lifecycle hooks) — `2m plugin list`
+- ✅ Built-in skill system (17 expert skills auto-injected into agent prompts) — `2m skill list`
 - 🔲 GitHub PR and CI/CD integration (auto-review PRs, run on push)
 - 🔲 Agent self-improvement via feedback loops (agents review each other)
 - 🔲 Web dashboard for team monitoring (read-only session viewer)
-- 🔲 Finish v2 gaps: tests, `2m history`, `web_fetch` tool, streaming renderer
+- ✅ `2m history <team>` — View last session's full conversation log with agent badges
 
 ### v4 (Future) — Enterprise & Collaboration
 - 🔲 Multi-user session sharing (team members see the same team channel)
