@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field
 
 from agent import run_agent, run_agent_stream, list_all_models, init_plugins, shutdown_plugins
 from plugin_base import Plugin
+from skill_loader import list_skills, get_skill
 
 # Configure logging — never log credentials or secrets
 logging.basicConfig(
@@ -163,6 +164,27 @@ async def _call_streaming(req: AgentRequest):
             "X-Accel-Buffering": "no",
         },
     )
+
+
+@app.get("/skills")
+async def get_skills():
+    """List all available skills with name, description, and license."""
+    skills = list_skills()
+    return {
+        "skills": [
+            {"name": s["name"], "description": s["description"], "license": s["license"]}
+            for s in skills
+        ]
+    }
+
+
+@app.get("/skills/{skill_name}")
+async def get_skill_endpoint(skill_name: str):
+    """Get a single skill by name, including its full content."""
+    skill = get_skill(skill_name)
+    if skill is None:
+        raise HTTPException(status_code=404, detail=f"Skill '{skill_name}' not found")
+    return {"skill": skill}
 
 
 @app.get("/plugins")

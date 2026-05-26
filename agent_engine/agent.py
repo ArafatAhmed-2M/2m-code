@@ -28,6 +28,7 @@ from providers import (
 from tools import get_tool_definitions
 from plugin_loader import discover_plugins
 from plugin_base import Plugin
+from skill_loader import get_skill
 
 logger = logging.getLogger("2mcode.agent")
 
@@ -57,6 +58,41 @@ def shutdown_plugins():
             p.on_shutdown()
         except Exception as e:
             logger.error("Plugin %s on_shutdown failed: %s", p.name, e)
+
+
+def _inject_skills(system: str, messages: list[dict]) -> str:
+    """Check if the user's latest message references a skill; if so, inject its content."""
+    if not messages:
+        return system
+    latest = messages[-1].get("content", "")
+    if not latest:
+        return system
+
+    # List of skill names to check
+    skill_names = [
+        "pdf", "pptx", "docx", "xlsx",
+        "frontend-design", "canvas-design", "algorithmic-art", "theme-factory",
+        "doc-coauthoring", "brand-guidelines", "internal-comms",
+        "mcp-builder", "claude-api", "web-artifacts-builder", "webapp-testing",
+        "slack-gif-creator", "skill-creator",
+    ]
+
+    injected = []
+    for name in skill_names:
+        # Check if skill name appears in the latest user message
+        if name.lower() in latest.lower():
+            skill = get_skill(name)
+            if skill and skill.get("content"):
+                injected.append(
+                    f"\n== SKILL: {skill['name']} ==\n{skill['description']}\n\n{skill['content']}\n== END SKILL =="
+                )
+
+    if not injected:
+        return system
+
+    extra = "\n\n".join(injected)
+    logger.info("Injected %d skill(s) into system prompt: %s", len(injected), [s.split("\n")[0] for s in injected])
+    return system + "\n\n" + extra
 
 
 def _run_plugin_turn_start_hooks(req: dict) -> dict:
@@ -177,11 +213,14 @@ async def run_agent(req) -> dict:
         len(messages),
     )
 
+    # Inject matching skills into the system prompt
+    system_prompt = _inject_skills(req.system, messages)
+
     # Run plugin on_agent_turn_start hooks
     req_dict = {
         "provider": req.provider,
         "model": req.model,
-        "system": req.system,
+        "system": system_prompt,
         "messages": messages,
         "tools": req.tools,
         "custom_tools": req.custom_tools,
@@ -249,11 +288,14 @@ async def run_agent_stream(req):
         actual_provider, req.model, req.tools, len(messages),
     )
 
+    # Inject matching skills into the system prompt
+    system_prompt = _inject_skills(req.system, messages)
+
     # Run plugin on_agent_turn_start hooks
     req_dict = {
         "provider": req.provider,
         "model": req.model,
-        "system": req.system,
+        "system": system_prompt,
         "messages": messages,
         "tools": req.tools,
         "custom_tools": req.custom_tools,
